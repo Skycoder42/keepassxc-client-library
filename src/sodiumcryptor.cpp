@@ -42,36 +42,35 @@ SecureByteArray SodiumCryptor::publicKey() const
 	return _publicKey;
 }
 
-std::pair<QByteArray, SecureByteArray> SodiumCryptor::encrypt(const QByteArray &plainText, const SecureByteArray &publicKey)
+QByteArray SodiumCryptor::encrypt(const QByteArray &plain, const SecureByteArray &publicKey, const SecureByteArray &nonce)
 {
-	const auto nonce = generateRandom(crypto_box_NONCEBYTES, SecureByteArray::State::Readonly);
-	QByteArray plain = QByteArray{crypto_box_ZEROBYTES, 0} + plainText;
-	QByteArray cipher{plain.size(), Qt::Uninitialized};
+	QByteArray cipher{plain.size() + crypto_box_MACBYTES, Qt::Uninitialized};
 
 	SecureByteArray::StateLocker _{&_secretKey, SecureByteArray::State::Readonly};
-	const auto ok = crypto_box(reinterpret_cast<quint8*>(cipher.data()),
-							   reinterpret_cast<const quint8*>(plain.constData()),
-							   plain.size(),
-							   nonce.constData(),
-							   publicKey.constData(),
-							   _secretKey.constData()) == 0;
-
-	return ok ?
-		std::make_pair(cipher, nonce) :
-		std::make_pair(QByteArray{}, SecureByteArray{});
-}
-
-QByteArray SodiumCryptor::decrypt(const QByteArray &cipher, const SecureByteArray &publicKey, const SecureByteArray &nonce)
-{
-	QByteArray plain{cipher.size(), Qt::Uninitialized};
-
-	SecureByteArray::StateLocker _{&_secretKey, SecureByteArray::State::Readonly};
-	const auto ok = crypto_box_open(reinterpret_cast<quint8*>(plain.data()),
-									reinterpret_cast<const quint8*>(cipher.constData()),
-									cipher.size(),
+	const auto ok = crypto_box_easy(reinterpret_cast<quint8*>(cipher.data()),
+									reinterpret_cast<const quint8*>(plain.constData()),
+									plain.size(),
 									nonce.constData(),
 									publicKey.constData(),
 									_secretKey.constData()) == 0;
 
-	return ok ? plain.mid(crypto_box_ZEROBYTES) : QByteArray{};
+	return ok ? cipher : QByteArray{};
+}
+
+QByteArray SodiumCryptor::decrypt(const QByteArray &cipher, const SecureByteArray &publicKey, const SecureByteArray &nonce)
+{
+	if(cipher.size() < crypto_box_MACBYTES)
+		return {};
+
+	QByteArray plain{cipher.size() - crypto_box_MACBYTES, Qt::Uninitialized};
+
+	SecureByteArray::StateLocker _{&_secretKey, SecureByteArray::State::Readonly};
+	const auto ok = crypto_box_open_easy(reinterpret_cast<quint8*>(plain.data()),
+										 reinterpret_cast<const quint8*>(cipher.constData()),
+										 cipher.size(),
+										 nonce.constData(),
+										 publicKey.constData(),
+										 _secretKey.constData()) == 0;
+
+	return ok ? plain : QByteArray{};
 }

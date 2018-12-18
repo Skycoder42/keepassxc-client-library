@@ -8,20 +8,25 @@ DEFINES += KPXCCLIENT_LIBRARY
 TARGET = $$qtLibraryTarget($$TARGET_BASE)
 QMAKE_TARGET_DESCRIPTION = "KeePassXC Client Library"
 
-SOURCES += \
-	kpxcclient.cpp \
-	sodiumcryptor.cpp \
-    securebytearray.cpp \
-    kpxcconnector.cpp
-
 PUBLIC_HEADERS += \
 	kpxcclient_global.h \
-	kpxcclient.h
+	securebytearray.h \
+	kpxcclient.h \
+	kpxcdatabaseregistry.h
 
 HEADERS += $$PUBLIC_HEADERS \
 	sodiumcryptor_p.h \
-    securebytearray_p.h \
-    kpxcconnector_p.h
+	kpxcconnector_p.h \
+	kpxcclient_p.h \
+	kpxcdatabaseregistry_p.h \
+	securebytearray_p.h
+
+SOURCES += \
+	kpxcclient.cpp \
+	sodiumcryptor.cpp \
+	securebytearray.cpp \
+	kpxcconnector.cpp \
+	kpxcdatabaseregistry.cpp
 
 unix {
 	CONFIG += link_pkgconfig

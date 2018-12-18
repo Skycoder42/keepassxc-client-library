@@ -6,7 +6,7 @@
 #include <QtCore/QObject>
 #include <QtCore/QByteArray>
 
-#include "securebytearray_p.h"
+#include "securebytearray.h"
 
 class SodiumCryptor : public QObject
 {
@@ -22,8 +22,9 @@ public:
 	void dropKeys();
 	SecureByteArray publicKey() const;
 
-	std::pair<QByteArray, SecureByteArray> encrypt(const QByteArray &plainText,
-												   const SecureByteArray &publicKey); // (ciphertext, nonce)
+	QByteArray encrypt(const QByteArray &plain,
+					   const SecureByteArray &publicKey,
+					   const SecureByteArray &nonce);
 	QByteArray decrypt(const QByteArray &cipher,
 					   const SecureByteArray &publicKey,
 					   const SecureByteArray &nonce);

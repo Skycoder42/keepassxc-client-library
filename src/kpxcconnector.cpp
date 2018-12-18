@@ -2,8 +2,9 @@
 #include <QtCore/QDebug>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QStandardPaths>
-#include <QThread>
 #include <chrono>
+
+const QVersionNumber KPXCConnector::minimumKeePassXCVersion{2, 3, 0};
 
 KPXCConnector::KPXCConnector(QObject *parent) :
 	QObject{parent},
@@ -18,24 +19,28 @@ KPXCConnector::KPXCConnector(QObject *parent) :
 			this, &KPXCConnector::disconnectFromKeePass);
 }
 
+bool KPXCConnector::isConnected() const
+{
+	return _connectPhase == PhaseConnected;
+}
+
 void KPXCConnector::connectToKeePass(const QString &target)
 {
 	if(_process) {
-		//emit error
+		emit error(KPXCClient::Error::ClientAlreadyConnected);
 		return;
 	}
 
-	if(!_cryptor->createKeys())
-		; //emit error
+	if(!_cryptor->createKeys()){
+		emit error(KPXCClient::Error::ClientKeyGenerationFailed);
+		return;
+	}
 	_serverKey.deallocate();
 	_clientId = _cryptor->generateRandomNonce(SecureByteArray::State::Readonly);
 	_nonce = _cryptor->generateRandomNonce(SecureByteArray::State::Readonly);
 
-	const auto procPath = QStandardPaths::findExecutable(target);
-	if(procPath.isEmpty())
-		; //emit error
 	_process = new QProcess{this};
-	_process->setProgram(procPath);
+	_process->setProgram(target);
 	connect(_process, &QProcess::started,
 			this, &KPXCConnector::started);
 	connect(_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
@@ -47,7 +52,7 @@ void KPXCConnector::connectToKeePass(const QString &target)
 	connect(_process, &QProcess::readyReadStandardError,
 			this, &KPXCConnector::stdErrReady);
 
-	_disconnectPhase = PhaseConnecting;
+	_connectPhase = PhaseConnecting;
 	_process->start();
 }
 
@@ -56,28 +61,28 @@ void KPXCConnector::disconnectFromKeePass()
 	if(!_process)
 		return;
 
-	switch(_disconnectPhase) {
+	switch(_connectPhase) {
 	case PhaseConnected:
-		qDebug() << "Disconnecting Phase: Sending EOF";
-		_disconnectPhase = PhaseEof;
+		qDebug() << "Disconnect Phase: Sending EOF";
+		_connectPhase = PhaseEof;
 		_process->closeWriteChannel();
 		_disconnectTimer->start();
 		break;
 	case PhaseConnecting:
 	case PhaseEof:
-		qDebug() << "Disconnecting Phase: Sending SIGTERM";
-		_disconnectPhase = PhaseTerminate;
+		qDebug() << "Disconnect Phase: Sending SIGTERM";
+		_connectPhase = PhaseTerminate;
 		_process->terminate();
 		_disconnectTimer->start();
 		break;
 	case PhaseTerminate:
-		qDebug() << "Disconnecting Phase: Sending SIGKILL";
-		_disconnectPhase = PhaseKill;
+		qDebug() << "Disconnect Phase: Sending SIGKILL";
+		_connectPhase = PhaseKill;
 		_process->kill();
 		_disconnectTimer->start();
 		break;
 	case PhaseKill:
-		qDebug() << "Disconnecting Phase: Dropping process";
+		qDebug() << "Disconnect Phase: Dropping process";
 		cleanup();
 		break;
 	default:
@@ -86,14 +91,27 @@ void KPXCConnector::disconnectFromKeePass()
 	}
 }
 
-void KPXCConnector::reconnectToKeePass()
+void KPXCConnector::sendEncrypted(const QString &action, QJsonObject message, bool triggerUnlock)
 {
+	message[QStringLiteral("action")] = action;
+	auto encData = _cryptor->encrypt(QJsonDocument{message}.toJson(QJsonDocument::Compact),
+									 _serverKey,
+									 _nonce);
 
+	QJsonObject msgData;
+	msgData[QStringLiteral("action")] = action;
+	msgData[QStringLiteral("message")] = QString::fromUtf8(encData.toBase64());
+	msgData[QStringLiteral("nonce")] = _nonce.toBase64();
+	msgData[QStringLiteral("clientID")] = _clientId.toBase64();
+	msgData[QStringLiteral("triggerUnlock")] = QVariant{triggerUnlock}.toString();
+
+	_nonce.increment(true);
+	sendMessage(msgData);
 }
 
 void KPXCConnector::started()
 {
-	_disconnectPhase = PhaseConnected;
+	_connectPhase = PhaseConnected;
 	QJsonObject keysMessage;
 	keysMessage[QStringLiteral("action")] = QStringLiteral("change-public-keys");
 	keysMessage[QStringLiteral("publicKey")] = _cryptor->publicKey().toBase64();
@@ -105,6 +123,8 @@ void KPXCConnector::started()
 
 void KPXCConnector::finished(int exitCode, QProcess::ExitStatus exitStatus)
 {
+	qInfo() << "Connection closed with code:" << exitCode
+			<< "(Status:" << exitStatus << ")";
 	cleanup();
 	emit disconnected();
 }
@@ -116,8 +136,53 @@ void KPXCConnector::procError(QProcess::ProcessError error)
 
 void KPXCConnector::stdOutReady()
 {
-	qDebug() << "stdout" << _process->readAllStandardOutput()
-			 << _nonce.toBase64();
+	// read the message
+	const auto encMessage = readMessageData();
+	if(encMessage.isEmpty())
+		return;
+	qDebug() << "[[ENCRYPTED]]" << encMessage;
+
+	// verify message
+	const auto action = encMessage[QStringLiteral("action")].toString();
+	if(!performChecks(action, encMessage))
+		return;
+
+	// handle special messages
+	if(action == QStringLiteral("change-public-keys")) {
+		handleChangePublicKeys(encMessage[QStringLiteral("publicKey")].toString());
+		return;
+	} else if(action == QStringLiteral("database-locked")) {
+		emit locked();
+		return;
+	} else if(action == QStringLiteral("database-unlocked")) {
+		emit unlocked();
+		return;
+	}
+
+	//verify nonce
+	const auto kpNonce = SecureByteArray::fromBase64(encMessage[QStringLiteral("nonce")].toString(), SecureByteArray::State::Readonly);
+	//TODO handle better
+//	if(kpNonce != _nonce) {
+//		emit messageFailed(action, KPXCClient::Error::ClientReceivedNonceInvalid);
+//		return;
+//	}
+
+	// decrypt message
+	const auto plainData = _cryptor->decrypt(QByteArray::fromBase64(encMessage[QStringLiteral("message")].toString().toUtf8()),
+											 _serverKey,
+											 kpNonce);
+	QJsonParseError error;
+	const auto message = QJsonDocument::fromJson(plainData, &error).object();
+	if(error.error != QJsonParseError::NoError){
+		emit messageFailed(action, KPXCClient::Error::ClientJsonParseError, error.errorString());
+		return;
+	}
+	qDebug() << "[[PLAIN]]" << message;
+
+	// check for success
+	if(!performChecks(action, message))
+		return;
+	emit messageReceived(action, message);
 }
 
 void KPXCConnector::stdErrReady()
@@ -145,5 +210,72 @@ void KPXCConnector::cleanup()
 	_serverKey.deallocate();
 	_clientId.deallocate();
 	_nonce.deallocate();
-	_disconnectPhase = PhaseKill;
+	_connectPhase = PhaseKill;
+}
+
+QJsonObject KPXCConnector::readMessageData()
+{
+	// read the data
+	const auto sizeData = _process->peek(sizeof(quint32));
+	if(sizeData.size() != sizeof(quint32))
+		return {};
+
+	const auto size = *reinterpret_cast<const quint32*>(sizeData.constData());
+	if(_process->bytesAvailable() < static_cast<qint64>(size + sizeof(quint32)))
+		return {};
+
+	_process->skip(sizeof(quint32));
+	const auto data = _process->read(size);
+	Q_ASSERT(data.size() == static_cast<int>(size));
+
+	// parse json
+	QJsonParseError error;
+	const auto message = QJsonDocument::fromJson(data, &error).object();
+	if(error.error != QJsonParseError::NoError) {
+		emit this->error(KPXCClient::Error::ClientJsonParseError, error.errorString());
+		return {};
+	} else
+		return message;
+}
+
+bool KPXCConnector::performChecks(const QString &action, const QJsonObject &message)
+{
+	// verify action
+	if(message.contains(QStringLiteral("action")) &&  //TODO remove if nowhere used...
+	   message[QStringLiteral("action")].toString() != action) {
+		emit messageFailed(action, KPXCClient::Error::ClientActionsDontMatch);
+		return false;
+	}
+
+	// verify version
+	if(message.contains(QStringLiteral("version"))) {
+		const auto kpVersion = QVersionNumber::fromString(message[QStringLiteral("version")].toString());
+		if(kpVersion < minimumKeePassXCVersion) {
+			messageFailed(action, KPXCClient::Error::ClientUnsupportedVersion, kpVersion.toString());
+			return false;
+		}
+	}
+
+	// read success status and cancel early if error
+	auto success = false;
+	if(message.contains(QStringLiteral("success")))
+		success = message[QStringLiteral("success")].toVariant().toBool();
+	else {
+		success = !message.contains(QStringLiteral("errorCode")) &&
+				  !message.contains(QStringLiteral("error"));
+	}
+	if(!success) {
+		emit messageFailed(action,
+						   static_cast<KPXCClient::Error>(message[QStringLiteral("errorCode")].toVariant().toInt()),
+						   message[QStringLiteral("error")].toString());
+		return false;
+	}
+
+	return true;
+}
+
+void KPXCConnector::handleChangePublicKeys(const QString &publicKey)
+{
+	_serverKey = SecureByteArray::fromBase64(publicKey, SecureByteArray::State::Readonly);
+	emit connected();
 }

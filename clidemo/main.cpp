@@ -2,7 +2,7 @@
 #include <kpxcclient.h>
 
 #include <QDebug>
-#include <kpxcconnector_p.h>
+#include <QTimer>
 
 int main(int argc, char *argv[])
 {
@@ -10,14 +10,21 @@ int main(int argc, char *argv[])
 
 	KPXCClient::init();
 
-	KPXCConnector connector;
-	QObject::connect(&connector, &KPXCConnector::disconnected,
-					 qApp, &QCoreApplication::quit);
-	connector.connectToKeePass(QStringLiteral("keepassxc-proxy"));
+	KPXCClient client;
+	client.setTriggerUnlock(true);
+	QObject::connect(&client, &KPXCClient::errorChanged, [&](KPXCClient::Error error) {
+		if(error == KPXCClient::Error::NoError)
+			return;
+		qDebug() << error << client.errorString();
+	});
+	QObject::connect(&client, &KPXCClient::disconnected,
+					 qApp, &QCoreApplication::quit,
+					 Qt::QueuedConnection);
+	client.connectToKeePass();
 
-	QTimer::singleShot(5000, &connector, [&](){
+	QTimer::singleShot(30000, &client, [&](){
 		qDebug("Triggered disconnect");
-		connector.disconnectFromKeePass();
+		client.disconnectFromKeePass();
 	});
 
 	return a.exec();
