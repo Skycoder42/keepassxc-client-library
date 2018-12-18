@@ -11,7 +11,8 @@ QMAKE_TARGET_DESCRIPTION = "KeePassXC Client Library"
 SOURCES += \
 	kpxcclient.cpp \
 	sodiumcryptor.cpp \
-    securebytearray.cpp
+    securebytearray.cpp \
+    kpxcconnector.cpp
 
 PUBLIC_HEADERS += \
 	kpxcclient_global.h \
@@ -19,7 +20,8 @@ PUBLIC_HEADERS += \
 
 HEADERS += $$PUBLIC_HEADERS \
 	sodiumcryptor_p.h \
-    securebytearray_p.h
+    securebytearray_p.h \
+    kpxcconnector_p.h
 
 unix {
 	CONFIG += link_pkgconfig

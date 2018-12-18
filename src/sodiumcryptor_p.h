@@ -16,11 +16,10 @@ public:
 	explicit SodiumCryptor(QObject *parent = nullptr);
 
 	SecureByteArray generateRandom(size_t bytes, SecureByteArray::State state = SecureByteArray::State::Readwrite) const;
+	SecureByteArray generateRandomNonce(SecureByteArray::State state = SecureByteArray::State::Readwrite) const;
 
 	bool createKeys();
-	QByteArray storeKeys();
-	bool loadKeys(const QByteArray &keys);
-
+	void dropKeys();
 	SecureByteArray publicKey() const;
 
 	std::pair<QByteArray, SecureByteArray> encrypt(const QByteArray &plainText,

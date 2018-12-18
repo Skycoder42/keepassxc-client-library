@@ -75,6 +75,16 @@ QByteArray SecureByteArray::copyToUnsafe() const
 		return {};
 }
 
+QString SecureByteArray::toBase64() const
+{
+	return QString::fromUtf8(asByteArray().toBase64());
+}
+
+SecureByteArray SecureByteArray::fromBase64(const QString &data, SecureByteArray::State state)
+{
+	return SecureByteArray{QByteArray::fromBase64(data.toUtf8()), state};
+}
+
 bool SecureByteArray::isNull() const
 {
 	return !_data;
@@ -96,7 +106,7 @@ bool SecureByteArray::operator==(const SecureByteArray &other) const
 		if(_size == 0)
 			return true;
 		else
-			return memcmp(_data, other._data, _size) == 0;
+			return sodium_memcmp(_data, other._data, _size) == 0;
 	} else
 		return false;
 }
@@ -155,6 +165,23 @@ void SecureByteArray::deallocate()
 		_size = 0;
 		_state = State::Unallocated;
 	}
+}
+
+void SecureByteArray::increment(bool autoState)
+{
+	StateLocker _{this};
+	if(autoState)
+		setState(State::Readwrite);
+	sodium_increment(_data, _size);
+}
+
+void SecureByteArray::add(const SecureByteArray &other, bool autoState)
+{
+	Q_ASSERT_X(_size == other._size, Q_FUNC_INFO, "To add two SecureByteArrays, they must be of the same size");
+	StateLocker _{this};
+	if(autoState)
+		setState(State::Readwrite);
+	sodium_add(_data, other._data, _size);
 }
 
 bool SecureByteArray::setState(SecureByteArray::State state)

@@ -16,6 +16,11 @@ SecureByteArray SodiumCryptor::generateRandom(size_t bytes, SecureByteArray::Sta
 	return data;
 }
 
+SecureByteArray SodiumCryptor::generateRandomNonce(SecureByteArray::State state) const
+{
+	return generateRandom(crypto_box_NONCEBYTES, state);
+}
+
 bool SodiumCryptor::createKeys()
 {
 	_secretKey.reallocate(crypto_box_SECRETKEYBYTES);
@@ -26,30 +31,10 @@ bool SodiumCryptor::createKeys()
 	return ok;
 }
 
-QByteArray SodiumCryptor::storeKeys()
+void SodiumCryptor::dropKeys()
 {
-	SecureByteArray::StateLocker _{&_secretKey, SecureByteArray::State::Readonly};
-	return _secretKey.asByteArray() + _publicKey.asByteArray();
-}
-
-bool SodiumCryptor::loadKeys(const QByteArray &keys)
-{
-	if(keys.size() != static_cast<int>(crypto_box_SECRETKEYBYTES + crypto_box_PUBLICKEYBYTES))
-		return false;
-
-	auto offset = 0;
-	_secretKey = SecureByteArray{
-		keys.mid(offset, static_cast<int>(crypto_box_SECRETKEYBYTES)),
-		SecureByteArray::State::Noaccess
-	};
-	offset += crypto_box_SECRETKEYBYTES;
-
-	_publicKey = SecureByteArray{
-		keys.mid(offset, crypto_box_PUBLICKEYBYTES),
-		SecureByteArray::State::Readonly
-	};
-	Q_ASSERT(static_cast<int>(offset + crypto_box_PUBLICKEYBYTES) == keys.size());
-	return true;
+	_secretKey.deallocate();
+	_publicKey.deallocate();
 }
 
 SecureByteArray SodiumCryptor::publicKey() const

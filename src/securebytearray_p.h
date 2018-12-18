@@ -51,6 +51,9 @@ public:
 	operator QByteArray() const;
 	QByteArray copyToUnsafe() const;
 
+	QString toBase64() const;
+	static SecureByteArray fromBase64(const QString &data, State state = State::Readwrite);
+
 	bool isNull() const;
 	explicit operator bool() const;
 	bool operator!() const;
@@ -67,6 +70,9 @@ public:
 
 	void reallocate(size_t size, State state = State::Readwrite);
 	void deallocate();
+
+	void increment(bool autoState = false);
+	void add(const SecureByteArray &other, bool autoState = false);
 
 	bool setState(State state);
 	bool makeNoaccess();
