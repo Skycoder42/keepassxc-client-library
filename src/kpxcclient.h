@@ -14,10 +14,22 @@ class KPXCCLIENT_EXPORT KPXCClient : public QObject
 	Q_OBJECT
 
 	Q_PROPERTY(IKPXCDatabaseRegistry* databaseRegistry READ databaseRegistry WRITE setDatabaseRegistry NOTIFY databaseRegistryChanged)
-	Q_PROPERTY(bool allowNewDatabase READ doesAllowNewDatabase WRITE setAllowNewDatabase NOTIFY allowNewDatabaseChanged)
-	Q_PROPERTY(bool triggerUnlock READ triggersUnlock WRITE setTriggerUnlock NOTIFY triggerUnlockChanged)
+
+	Q_PROPERTY(Options options READ options WRITE setOptions NOTIFY optionsChanged)
 
 public:
+	enum class Option {
+		None = 0x00,
+		AllowNewDatabase = 0x01,
+		TriggerUnlock = 0x02,
+		OpenOnConnect = 0x04,
+		AllowDatabaseChange = 0x08,
+
+		Default = (Option::AllowNewDatabase | Option::TriggerUnlock | Option::OpenOnConnect)
+	};
+	Q_DECLARE_FLAGS(Options, Option)
+	Q_FLAG(Options)
+
 	enum class Error {
 		NoError = 0,
 		UnknownError = -1,
@@ -55,27 +67,24 @@ public:
 	~KPXCClient() override;
 
 	IKPXCDatabaseRegistry* databaseRegistry() const;
-	bool doesAllowNewDatabase() const;
+	Options options() const;
 
 	Error error() const;
 	QString errorString() const;
-	bool triggersUnlock() const;
 
 public Q_SLOTS:
 	void connectToKeePass(const QString &keePassPath = QStringLiteral("keepassxc-proxy"));
 	void disconnectFromKeePass();
 
 	void setDatabaseRegistry(IKPXCDatabaseRegistry* databaseRegistry);
-	void setAllowNewDatabase(bool allowNewDatabase);
-	void setTriggerUnlock(bool triggerUnlock);
+	void setOptions(Options options);
 
 Q_SIGNALS:
 	void connected(QPrivateSignal);
 	void disconnected(QPrivateSignal);
 
 	void databaseRegistryChanged(IKPXCDatabaseRegistry* databaseRegistry, QPrivateSignal);
-	void allowNewDatabaseChanged(bool allowNewDatabase, QPrivateSignal);
-	void triggerUnlockChanged(bool triggerUnlock, QPrivateSignal);
+	void optionsChanged(Options options, QPrivateSignal);
 	void errorChanged(Error error, QPrivateSignal);
 
 protected:
@@ -84,7 +93,7 @@ protected:
 private Q_SLOTS:
 	void dbConnected();
 	void dbDisconnected();
-	bool dbError(Error code, const QString &message);
+	void dbError(Error code, const QString &message);
 	void dbLocked();
 	void dbUnlocked();
 	void dbMsgRecv(const QString &action, const QJsonObject &message);
@@ -94,5 +103,7 @@ private:
 	friend class KPXCClientPrivate;
 	QScopedPointer<KPXCClientPrivate> d;
 };
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(KPXCClient::Options)
 
 #endif // KPXCCLIENT_H

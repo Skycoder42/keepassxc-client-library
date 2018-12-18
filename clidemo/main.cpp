@@ -11,7 +11,6 @@ int main(int argc, char *argv[])
 	KPXCClient::init();
 
 	KPXCClient client;
-	client.setTriggerUnlock(true);
 	QObject::connect(&client, &KPXCClient::errorChanged, [&](KPXCClient::Error error) {
 		if(error == KPXCClient::Error::NoError)
 			return;

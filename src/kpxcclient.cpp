@@ -43,9 +43,9 @@ IKPXCDatabaseRegistry *KPXCClient::databaseRegistry() const
 	return d->dbReg;
 }
 
-bool KPXCClient::doesAllowNewDatabase() const
+KPXCClient::Options KPXCClient::options() const
 {
-	return d->allowNewDbs;
+	return d->options;
 }
 
 KPXCClient::Error KPXCClient::error() const
@@ -56,11 +56,6 @@ KPXCClient::Error KPXCClient::error() const
 QString KPXCClient::errorString() const
 {
 	return d->lastErrorString;
-}
-
-bool KPXCClient::triggersUnlock() const
-{
-	return d->triggerUnlock;
 }
 
 void KPXCClient::connectToKeePass(const QString &keePassPath)
@@ -92,34 +87,26 @@ void KPXCClient::setDatabaseRegistry(IKPXCDatabaseRegistry *databaseRegistry)
 	emit databaseRegistryChanged(d->dbReg, {});
 }
 
-void KPXCClient::setAllowNewDatabase(bool allowNewDatabase)
+void KPXCClient::setOptions(Options options)
 {
-	if (d->allowNewDbs == allowNewDatabase)
+	if (d->options == options)
 		return;
 
-	d->allowNewDbs = allowNewDatabase;
-	emit allowNewDatabaseChanged(d->allowNewDbs, {});
-}
-
-void KPXCClient::setTriggerUnlock(bool triggerUnlock)
-{
-	if (d->triggerUnlock == triggerUnlock)
-		return;
-
-	d->triggerUnlock = triggerUnlock;
-	emit triggerUnlockChanged(d->triggerUnlock, {});
+	d->options = options;
+	emit optionsChanged(d->options, {});
 }
 
 bool KPXCClient::allowDatabase(const QByteArray &databaseHash) const
 {
 	Q_UNUSED(databaseHash)
-	return d->allowNewDbs;
+	return d->options.testFlag(Option::AllowNewDatabase);
 }
 
 void KPXCClient::dbConnected()
 {
 	// encrypted channel established -> get db data
-	d->connector->sendEncrypted(KPXCClientPrivate::ActionGetDatabaseHash, {}, d->triggerUnlock);
+	d->connector->sendEncrypted(KPXCClientPrivate::ActionGetDatabaseHash, {},
+								d->options.testFlag(Option::TriggerUnlock));
 }
 
 void KPXCClient::dbDisconnected()
@@ -130,15 +117,10 @@ void KPXCClient::dbDisconnected()
 	d->reconnectOnUnlock = false;
 }
 
-bool KPXCClient::dbError(KPXCClient::Error code, const QString &message)
+void KPXCClient::dbError(KPXCClient::Error code, const QString &message)
 {
-	if(code == Error::KeePassDatabaseNotOpen && d->triggerUnlock) {
-		d->reconnectOnUnlock = true;
-	} else {
-		d->setError(code, message);
-		disconnectFromKeePass();
-		return true;
-	}
+	d->setError(code, message);
+	disconnectFromKeePass();
 }
 
 void KPXCClient::dbLocked()
@@ -163,7 +145,12 @@ void KPXCClient::dbMsgRecv(const QString &action, const QJsonObject &message)
 
 void KPXCClient::dbMsgFail(const QString &action, Error code, const QString &message)
 {
-	if(dbError(code, message)) {
+	if(action == KPXCClientPrivate::ActionGetDatabaseHash &&
+	   code == Error::KeePassDatabaseNotOpen &&
+	   d->options.testFlag(Option::TriggerUnlock)) {
+		d->reconnectOnUnlock = true;
+	} else {
+		dbError(code, message);
 		Q_UNIMPLEMENTED();
 		//TODO forward failure to action handler?
 	}

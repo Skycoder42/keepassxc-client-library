@@ -15,8 +15,7 @@ public:
 	KPXCConnector * const connector;
 
 	IKPXCDatabaseRegistry *dbReg;
-	bool allowNewDbs = true;
-	bool triggerUnlock = false;
+	KPXCClient::Options options = KPXCClient::Option::Default;
 
 	KPXCClient::Error lastError = KPXCClient::Error::NoError;
 	QString lastErrorString;
