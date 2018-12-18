@@ -24,6 +24,11 @@ bool KPXCConnector::isConnected() const
 	return _connectPhase == PhaseConnected;
 }
 
+bool KPXCConnector::isConnecting() const
+{
+	return _connectPhase == PhaseConnecting;
+}
+
 void KPXCConnector::connectToKeePass(const QString &target)
 {
 	if(_process) {

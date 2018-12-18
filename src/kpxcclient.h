@@ -14,8 +14,10 @@ class KPXCCLIENT_EXPORT KPXCClient : public QObject
 	Q_OBJECT
 
 	Q_PROPERTY(IKPXCDatabaseRegistry* databaseRegistry READ databaseRegistry WRITE setDatabaseRegistry NOTIFY databaseRegistryChanged)
-
 	Q_PROPERTY(Options options READ options WRITE setOptions NOTIFY optionsChanged)
+
+	Q_PROPERTY(State state READ state NOTIFY stateChanged)
+	Q_PROPERTY(QByteArray currentDatabase READ currentDatabase NOTIFY currentDatabaseChanged)
 
 public:
 	enum class Option {
@@ -24,11 +26,20 @@ public:
 		TriggerUnlock = 0x02,
 		OpenOnConnect = 0x04,
 		AllowDatabaseChange = 0x08,
+		DisconnectOnClose = 0x10,
 
 		Default = (Option::AllowNewDatabase | Option::TriggerUnlock | Option::OpenOnConnect)
 	};
 	Q_DECLARE_FLAGS(Options, Option)
 	Q_FLAG(Options)
+
+	enum class State {
+		Disconnected,
+		Connecting,
+		Locked,
+		Unlocked
+	};
+	Q_ENUM(State)
 
 	enum class Error {
 		NoError = 0,
@@ -57,7 +68,8 @@ public:
 		ClientReceivedNonceInvalid = 0x00030000,
 		ClientJsonParseError = 0x00040000,
 		ClientActionsDontMatch = 0x00050000,
-		ClientUnsupportedVersion = 0x00060000
+		ClientUnsupportedVersion = 0x00060000,
+		ClientDatabaseChanged = 0x00070000
 	};
 	Q_ENUM(Error)
 
@@ -68,6 +80,8 @@ public:
 
 	IKPXCDatabaseRegistry* databaseRegistry() const;
 	Options options() const;
+	State state() const;
+	QByteArray currentDatabase() const;
 
 	Error error() const;
 	QString errorString() const;
@@ -76,6 +90,9 @@ public Q_SLOTS:
 	void connectToKeePass(const QString &keePassPath = QStringLiteral("keepassxc-proxy"));
 	void disconnectFromKeePass();
 
+	void openDatabase();
+	void closeDatabase();
+
 	void setDatabaseRegistry(IKPXCDatabaseRegistry* databaseRegistry);
 	void setOptions(Options options);
 
@@ -83,8 +100,13 @@ Q_SIGNALS:
 	void connected(QPrivateSignal);
 	void disconnected(QPrivateSignal);
 
+	void databaseOpened(const QByteArray &dbHash, QPrivateSignal);
+	void databaseClosed(QPrivateSignal);
+
 	void databaseRegistryChanged(IKPXCDatabaseRegistry* databaseRegistry, QPrivateSignal);
 	void optionsChanged(Options options, QPrivateSignal);
+	void stateChanged(QPrivateSignal);
+	void currentDatabaseChanged(QByteArray currentDatabase, QPrivateSignal);
 	void errorChanged(Error error, QPrivateSignal);
 
 protected:
@@ -102,6 +124,7 @@ private Q_SLOTS:
 private:
 	friend class KPXCClientPrivate;
 	QScopedPointer<KPXCClientPrivate> d;
+	QByteArray m_currentDatabase;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(KPXCClient::Options)

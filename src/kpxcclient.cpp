@@ -20,6 +20,17 @@ KPXCClient::KPXCClient(QObject *parent) :
 	d{new KPXCClientPrivate{this}}
 {
 	Q_ASSERT_X(KPXCClientPrivate::initialized, Q_FUNC_INFO, "You must call KPXCClient::init() before creating a KPXCClient");
+	connect(this, &KPXCClient::connected,
+			this, &KPXCClient::stateChanged);
+	connect(this, &KPXCClient::disconnected,
+			this, &KPXCClient::stateChanged);
+	connect(this, &KPXCClient::databaseOpened,
+			this, [this](){
+		stateChanged({});
+	});
+	connect(this, &KPXCClient::databaseClosed,
+			this, &KPXCClient::stateChanged);
+
 	connect(d->connector, &KPXCConnector::connected,
 			this, &KPXCClient::dbConnected);
 	connect(d->connector, &KPXCConnector::disconnected,
@@ -48,6 +59,21 @@ KPXCClient::Options KPXCClient::options() const
 	return d->options;
 }
 
+KPXCClient::State KPXCClient::state() const
+{
+	if(d->connector->isConnected())
+		return d->locked ? State::Locked : State::Unlocked;
+	else if(d->connector->isConnecting())
+		return State::Connecting;
+	else
+		return State::Disconnected;
+}
+
+QByteArray KPXCClient::currentDatabase() const
+{
+	return d->currentDatabase;
+}
+
 KPXCClient::Error KPXCClient::error() const
 {
 	return d->lastError;
@@ -65,14 +91,28 @@ void KPXCClient::connectToKeePass(const QString &keePassPath)
 		return;
 	}
 
-	d->reconnectOnUnlock = false;
-	d->setError(Error::NoError);
+	d->clear();
 	d->connector->connectToKeePass(keePassPath);
 }
 
 void KPXCClient::disconnectFromKeePass()
 {
 	d->connector->disconnectFromKeePass();
+}
+
+void KPXCClient::openDatabase()
+{
+	if(state() != State::Locked)
+		return; //TODO error?
+	d->connector->sendEncrypted(KPXCClientPrivate::ActionGetDatabaseHash, {},
+								d->options.testFlag(Option::TriggerUnlock));
+}
+
+void KPXCClient::closeDatabase()
+{
+	if(state() != State::Unlocked)
+		return; //TODO error?
+	//TODO send lock message
 }
 
 void KPXCClient::setDatabaseRegistry(IKPXCDatabaseRegistry *databaseRegistry)
@@ -104,17 +144,16 @@ bool KPXCClient::allowDatabase(const QByteArray &databaseHash) const
 
 void KPXCClient::dbConnected()
 {
-	// encrypted channel established -> get db data
-	d->connector->sendEncrypted(KPXCClientPrivate::ActionGetDatabaseHash, {},
-								d->options.testFlag(Option::TriggerUnlock));
+	emit connected({});
+	if(d->options.testFlag(Option::OpenOnConnect))
+		openDatabase();
 }
 
 void KPXCClient::dbDisconnected()
 {
 	qDebug() << Q_FUNC_INFO;
 	emit disconnected({});
-	d->setError(Error::NoError);
-	d->reconnectOnUnlock = false;
+	d->clear();
 }
 
 void KPXCClient::dbError(KPXCClient::Error code, const QString &message)
@@ -125,22 +164,24 @@ void KPXCClient::dbError(KPXCClient::Error code, const QString &message)
 
 void KPXCClient::dbLocked()
 {
-	Q_UNIMPLEMENTED();
+	emit databaseClosed({});
+	if(d->options.testFlag(Option::DisconnectOnClose))
+		disconnectFromKeePass();
 }
 
 void KPXCClient::dbUnlocked()
 {
-	Q_UNIMPLEMENTED();
-	if(d->reconnectOnUnlock) {
-		d->reconnectOnUnlock = false;
-		dbConnected();
-	}
+	//TODO do nothing if already open?
+	openDatabase();
 }
 
 void KPXCClient::dbMsgRecv(const QString &action, const QJsonObject &message)
 {
-	Q_UNIMPLEMENTED();
 	qDebug() << Q_FUNC_INFO << action << message;
+	if(action == KPXCClientPrivate::ActionGetDatabaseHash)
+		d->onDbHash(message);
+	else
+		Q_UNIMPLEMENTED();
 }
 
 void KPXCClient::dbMsgFail(const QString &action, Error code, const QString &message)
@@ -148,7 +189,7 @@ void KPXCClient::dbMsgFail(const QString &action, Error code, const QString &mes
 	if(action == KPXCClientPrivate::ActionGetDatabaseHash &&
 	   code == Error::KeePassDatabaseNotOpen &&
 	   d->options.testFlag(Option::TriggerUnlock)) {
-		d->reconnectOnUnlock = true;
+		qInfo() << "Database locked. Waiting for user to unlock";
 	} else {
 		dbError(code, message);
 		Q_UNIMPLEMENTED();
@@ -214,6 +255,9 @@ void KPXCClientPrivate::setError(KPXCClient::Error error, const QString &msg)
 		lastErrorString = KPXCClient::tr("Unsupported KeePassXC Version. Must be at least %1, but currently is %2")
 						  .arg(KPXCConnector::minimumKeePassXCVersion.toString(), msg);
 		break;
+	case KPXCClient::Error::ClientDatabaseChanged:
+		lastErrorString = KPXCClient::tr("The opened database in KeePassXC was changed");
+		break;
 	// General errors
 	case KPXCClient::Error::NoError:
 		lastErrorString = KPXCClient::tr("No Error");
@@ -224,4 +268,30 @@ void KPXCClientPrivate::setError(KPXCClient::Error error, const QString &msg)
 		break;
 	}
 	emit q->errorChanged(lastError, {});
+}
+
+void KPXCClientPrivate::clear()
+{
+	locked = true;
+	currentDatabase.clear();
+	setError(KPXCClient::Error::NoError);
+}
+
+void KPXCClientPrivate::onDbHash(const QJsonObject &message)
+{
+	const auto dbHash = QByteArray::fromHex(message[QStringLiteral("hash")].toString().toUtf8());
+	if(currentDatabase.isEmpty()) { // no db yet -> store it and contine with assoc
+		currentDatabase = dbHash;
+		emit q->currentDatabaseChanged(currentDatabase, {});
+	} else if(currentDatabase != dbHash) {
+		if(options.testFlag(KPXCClient::Option::AllowDatabaseChange)) {
+			currentDatabase = dbHash;
+			emit q->currentDatabaseChanged(currentDatabase, {});
+		} else {
+			setError(KPXCClient::Error::ClientDatabaseChanged);
+			q->disconnectFromKeePass();
+			return;
+		}
+	}
+	//TODO perform assoc steps (test + do)
 }

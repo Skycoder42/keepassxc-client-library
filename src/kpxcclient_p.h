@@ -17,13 +17,17 @@ public:
 	IKPXCDatabaseRegistry *dbReg;
 	KPXCClient::Options options = KPXCClient::Option::Default;
 
+	QByteArray currentDatabase;
+	bool locked = true;
 	KPXCClient::Error lastError = KPXCClient::Error::NoError;
 	QString lastErrorString;
-	bool reconnectOnUnlock = false;
 
 	KPXCClientPrivate(KPXCClient *q_ptr);
 
 	void setError(KPXCClient::Error error, const QString &msg = {});
+	void clear();
+
+	void onDbHash(const QJsonObject &message);
 };
 
 #endif // KPXCCLIENT_P_H

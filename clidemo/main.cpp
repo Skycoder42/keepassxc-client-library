@@ -16,6 +16,9 @@ int main(int argc, char *argv[])
 			return;
 		qDebug() << error << client.errorString();
 	});
+	QObject::connect(&client, &KPXCClient::currentDatabaseChanged, [&](QByteArray dbHash) {
+		qDebug() << dbHash.toHex();
+	});
 	QObject::connect(&client, &KPXCClient::disconnected,
 					 qApp, &QCoreApplication::quit,
 					 Qt::QueuedConnection);

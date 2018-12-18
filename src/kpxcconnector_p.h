@@ -21,6 +21,7 @@ public:
 	explicit KPXCConnector(QObject *parent = nullptr);
 
 	bool isConnected() const;
+	bool isConnecting() const;
 
 public Q_SLOTS:
 	void connectToKeePass(const QString &target);
