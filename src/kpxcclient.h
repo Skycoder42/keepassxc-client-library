@@ -69,7 +69,8 @@ public:
 		ClientJsonParseError = 0x00040000,
 		ClientActionsDontMatch = 0x00050000,
 		ClientUnsupportedVersion = 0x00060000,
-		ClientDatabaseChanged = 0x00070000
+		ClientDatabaseChanged = 0x00070000,
+		ClientDatabaseRejected = 0x00080000
 	};
 	Q_ENUM(Error)
 
@@ -124,7 +125,6 @@ private Q_SLOTS:
 private:
 	friend class KPXCClientPrivate;
 	QScopedPointer<KPXCClientPrivate> d;
-	QByteArray m_currentDatabase;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(KPXCClient::Options)

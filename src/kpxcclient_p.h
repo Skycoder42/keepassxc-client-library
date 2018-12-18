@@ -8,6 +8,8 @@ class KPXCClientPrivate
 {
 public:
 	static const QString ActionGetDatabaseHash;
+	static const QString ActionTestAssociate;
+	static const QString ActionAssociate;
 
 	static bool initialized;
 
@@ -22,12 +24,19 @@ public:
 	KPXCClient::Error lastError = KPXCClient::Error::NoError;
 	QString lastErrorString;
 
+	SecureByteArray _keyCache;
+
 	KPXCClientPrivate(KPXCClient *q_ptr);
 
 	void setError(KPXCClient::Error error, const QString &msg = {});
 	void clear();
 
 	void onDbHash(const QJsonObject &message);
+	void onAssoc(const QJsonObject &message);
+	void onTestAssoc(const QJsonObject &message);
+
+	void sendTestAssoc();
+	void sendAssoc();
 };
 
 #endif // KPXCCLIENT_P_H

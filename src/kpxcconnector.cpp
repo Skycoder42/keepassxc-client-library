@@ -29,6 +29,11 @@ bool KPXCConnector::isConnecting() const
 	return _connectPhase == PhaseConnecting;
 }
 
+SodiumCryptor *KPXCConnector::cryptor() const
+{
+	return _cryptor;
+}
+
 void KPXCConnector::connectToKeePass(const QString &target)
 {
 	if(_process) {
@@ -145,7 +150,6 @@ void KPXCConnector::stdOutReady()
 	const auto encMessage = readMessageData();
 	if(encMessage.isEmpty())
 		return;
-	qDebug() << "[[ENCRYPTED]]" << encMessage;
 
 	// verify message
 	const auto action = encMessage[QStringLiteral("action")].toString();
@@ -182,7 +186,6 @@ void KPXCConnector::stdOutReady()
 		emit messageFailed(action, KPXCClient::Error::ClientJsonParseError, error.errorString());
 		return;
 	}
-	qDebug() << "[[PLAIN]]" << message;
 
 	// check for success
 	if(!performChecks(action, message))

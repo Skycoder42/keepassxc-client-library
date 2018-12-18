@@ -4,6 +4,7 @@
 #include <sodium/randombytes.h>
 #include <sodium/randombytes_sysrandom.h>
 #include <sodium/core.h>
+#include <sodium/crypto_box.h>
 
 bool KPXCClient::init()
 {
@@ -177,19 +178,27 @@ void KPXCClient::dbUnlocked()
 
 void KPXCClient::dbMsgRecv(const QString &action, const QJsonObject &message)
 {
-	qDebug() << Q_FUNC_INFO << action << message;
 	if(action == KPXCClientPrivate::ActionGetDatabaseHash)
 		d->onDbHash(message);
+	else if(action == KPXCClientPrivate::ActionAssociate)
+		d->onAssoc(message);
+	else if(action == KPXCClientPrivate::ActionTestAssociate)
+		d->onTestAssoc(message);
 	else
-		Q_UNIMPLEMENTED();
+		qDebug() << Q_FUNC_INFO << action << message;
 }
 
 void KPXCClient::dbMsgFail(const QString &action, Error code, const QString &message)
 {
-	if(action == KPXCClientPrivate::ActionGetDatabaseHash &&
-	   code == Error::KeePassDatabaseNotOpen &&
+	if(code == Error::KeePassDatabaseNotOpen &&
+	   action == KPXCClientPrivate::ActionGetDatabaseHash &&
 	   d->options.testFlag(Option::TriggerUnlock)) {
 		qInfo() << "Database locked. Waiting for user to unlock";
+	} else if(code == Error::KeePassAssociationFailed &&
+			  action == KPXCClientPrivate::ActionTestAssociate) {
+		qWarning() << "Current association was rejected. Initiation re-association";
+		d->dbReg->removeClientId(d->currentDatabase);
+		d->sendAssoc();
 	} else {
 		dbError(code, message);
 		Q_UNIMPLEMENTED();
@@ -200,6 +209,8 @@ void KPXCClient::dbMsgFail(const QString &action, Error code, const QString &mes
 // ------------- Private implementation -------------
 
 const QString KPXCClientPrivate::ActionGetDatabaseHash{QStringLiteral("get-databasehash")};
+const QString KPXCClientPrivate::ActionTestAssociate{QStringLiteral("test-associate")};
+const QString KPXCClientPrivate::ActionAssociate{QStringLiteral("associate")};
 
 bool KPXCClientPrivate::initialized = false;
 
@@ -258,6 +269,9 @@ void KPXCClientPrivate::setError(KPXCClient::Error error, const QString &msg)
 	case KPXCClient::Error::ClientDatabaseChanged:
 		lastErrorString = KPXCClient::tr("The opened database in KeePassXC was changed");
 		break;
+	case KPXCClient::Error::ClientDatabaseRejected:
+		lastErrorString = KPXCClient::tr("The database hash was not known and thus rejected");
+		break;
 	// General errors
 	case KPXCClient::Error::NoError:
 		lastErrorString = KPXCClient::tr("No Error");
@@ -280,7 +294,7 @@ void KPXCClientPrivate::clear()
 void KPXCClientPrivate::onDbHash(const QJsonObject &message)
 {
 	const auto dbHash = QByteArray::fromHex(message[QStringLiteral("hash")].toString().toUtf8());
-	if(currentDatabase.isEmpty()) { // no db yet -> store it and contine with assoc
+	if(currentDatabase.isEmpty()) {
 		currentDatabase = dbHash;
 		emit q->currentDatabaseChanged(currentDatabase, {});
 	} else if(currentDatabase != dbHash) {
@@ -293,5 +307,60 @@ void KPXCClientPrivate::onDbHash(const QJsonObject &message)
 			return;
 		}
 	}
-	//TODO perform assoc steps (test + do)
+
+	if(dbReg->hasClientId(currentDatabase))
+		sendTestAssoc();
+	else if(q->allowDatabase(currentDatabase))
+		sendAssoc();
+	else {
+		setError(KPXCClient::Error::ClientDatabaseRejected);
+		q->disconnectFromKeePass();
+	}
+}
+
+void KPXCClientPrivate::onAssoc(const QJsonObject &message)
+{
+	const auto hash = QByteArray::fromHex(message[QStringLiteral("hash")].toString().toUtf8());
+	if(hash != currentDatabase) {
+		setError(KPXCClient::Error::ClientDatabaseChanged);
+		q->disconnectFromKeePass();
+		return;
+	}
+
+	IKPXCDatabaseRegistry::ClientId cId;
+	cId.name = message[QStringLiteral("id")].toString();
+	cId.key = std::move(_keyCache);
+	cId.key.makeReadonly();
+	dbReg->addClientId(currentDatabase, std::move(cId));
+	emit q->databaseOpened(currentDatabase, {});
+}
+
+void KPXCClientPrivate::onTestAssoc(const QJsonObject &message)
+{
+	const auto hash = QByteArray::fromHex(message[QStringLiteral("hash")].toString().toUtf8());
+	if(hash != currentDatabase) {
+		setError(KPXCClient::Error::ClientDatabaseChanged);
+		q->disconnectFromKeePass();
+		return;
+	}
+	emit q->databaseOpened(currentDatabase, {});
+}
+
+void KPXCClientPrivate::sendTestAssoc()
+{
+	auto cId = dbReg->getClientId(currentDatabase);
+	QJsonObject message;
+	message[QStringLiteral("id")] = cId.name;
+	message[QStringLiteral("key")] = cId.key.toBase64();
+	connector->sendEncrypted(ActionTestAssociate, message);
+}
+
+void KPXCClientPrivate::sendAssoc()
+{
+	_keyCache = connector->cryptor()->generateRandom(crypto_box_PUBLICKEYBYTES, SecureByteArray::State::Readonly);
+	QJsonObject message;
+	message[QStringLiteral("key")] = connector->cryptor()->publicKey().toBase64();
+	message[QStringLiteral("idKey")] = _keyCache.toBase64();
+	_keyCache.makeNoaccess();
+	connector->sendEncrypted(ActionAssociate, message);
 }

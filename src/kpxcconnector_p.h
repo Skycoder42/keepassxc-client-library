@@ -23,6 +23,8 @@ public:
 	bool isConnected() const;
 	bool isConnecting() const;
 
+	SodiumCryptor *cryptor() const;
+
 public Q_SLOTS:
 	void connectToKeePass(const QString &target);
 	void disconnectFromKeePass();
