@@ -4,6 +4,10 @@
 #include <QDebug>
 #include <QTimer>
 
+#ifdef USE_CTRL_SIGNALS
+#include <QCtrlSignals>
+#endif
+
 int main(int argc, char *argv[])
 {
 	QCoreApplication a(argc, argv);
@@ -13,6 +17,13 @@ int main(int argc, char *argv[])
 
 	KPXCClient client;
 	static_cast<KPXCDefaultDatabaseRegistry*>(client.databaseRegistry())->setPersistent(true);
+
+#ifdef USE_CTRL_SIGNALS
+	QCtrlSignalHandler::instance()->registerForSignal(QCtrlSignalHandler::SigInt);
+	QCtrlSignalHandler::instance()->registerForSignal(QCtrlSignalHandler::SigTerm);
+	QObject::connect(QCtrlSignalHandler::instance(), &QCtrlSignalHandler::ctrlSignal,
+					 &client, &KPXCClient::disconnectFromKeePass);
+#endif
 
 	QObject::connect(&client, &KPXCClient::errorChanged, [&](KPXCClient::Error error) {
 		if(error == KPXCClient::Error::NoError)
@@ -29,11 +40,6 @@ int main(int argc, char *argv[])
 					 qApp, &QCoreApplication::quit,
 					 Qt::QueuedConnection);
 	client.connectToKeePass();
-
-	QTimer::singleShot(30000, &client, [&](){
-		qDebug("Triggered disconnect");
-		client.disconnectFromKeePass();
-	});
 
 	return a.exec();
 }
