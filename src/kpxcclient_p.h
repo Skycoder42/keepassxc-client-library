@@ -10,6 +10,7 @@ public:
 	static const QString ActionGetDatabaseHash;
 	static const QString ActionTestAssociate;
 	static const QString ActionAssociate;
+	static const QString ActionGeneratePassword;
 	static const QString ActionLockDatabase;
 
 	static bool initialized;
@@ -35,6 +36,7 @@ public:
 	void onDbHash(const QJsonObject &message);
 	void onAssoc(const QJsonObject &message);
 	void onTestAssoc(const QJsonObject &message);
+	void onGeneratePasswd(const QJsonObject &message);
 
 	void sendTestAssoc();
 	void sendAssoc();

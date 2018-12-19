@@ -1,6 +1,7 @@
 #include "kpxcclient.h"
 #include "kpxcclient_p.h"
 #include <QtCore/QDebug>
+#include <QtCore/QJsonArray>
 #include <sodium/randombytes.h>
 #include <sodium/randombytes_sysrandom.h>
 #include <sodium/core.h>
@@ -113,7 +114,12 @@ void KPXCClient::closeDatabase()
 {
 	if(state() != State::Unlocked)
 		return; //TODO error?
-	d->connector->sendEncrypted(KPXCClientPrivate::ActionLockDatabase, {});
+	d->connector->sendEncrypted(KPXCClientPrivate::ActionLockDatabase);
+}
+
+void KPXCClient::generatePassword()
+{
+	d->connector->sendEncrypted(KPXCClientPrivate::ActionGeneratePassword);
 }
 
 void KPXCClient::setDatabaseRegistry(IKPXCDatabaseRegistry *databaseRegistry)
@@ -185,6 +191,8 @@ void KPXCClient::dbMsgRecv(const QString &action, const QJsonObject &message)
 		d->onAssoc(message);
 	else if(action == KPXCClientPrivate::ActionTestAssociate)
 		d->onTestAssoc(message);
+	else if(action == KPXCClientPrivate::ActionGeneratePassword)
+		d->onGeneratePasswd(message);
 	else if(action == KPXCClientPrivate::ActionLockDatabase)
 		qDebug() << "Database locked successfully";
 	else
@@ -214,6 +222,7 @@ void KPXCClient::dbMsgFail(const QString &action, Error code, const QString &mes
 const QString KPXCClientPrivate::ActionGetDatabaseHash{QStringLiteral("get-databasehash")};
 const QString KPXCClientPrivate::ActionTestAssociate{QStringLiteral("test-associate")};
 const QString KPXCClientPrivate::ActionAssociate{QStringLiteral("associate")};
+const QString KPXCClientPrivate::ActionGeneratePassword{QStringLiteral("generate-password")};
 const QString KPXCClientPrivate::ActionLockDatabase{QStringLiteral("lock-database")};
 
 bool KPXCClientPrivate::initialized = false;
@@ -350,6 +359,15 @@ void KPXCClientPrivate::onTestAssoc(const QJsonObject &message)
 	}
 	locked = false;
 	emit q->databaseOpened(currentDatabase, {});
+}
+
+void KPXCClientPrivate::onGeneratePasswd(const QJsonObject &message)
+{
+	const auto entries = message[QStringLiteral("entries")].toArray();
+	QStringList passwords;
+	for(const auto &entry : entries)
+		passwords.append(entry.toObject()[QStringLiteral("password")].toString());
+	emit q->passwordsGenerated(passwords, {});
 }
 
 void KPXCClientPrivate::sendTestAssoc()

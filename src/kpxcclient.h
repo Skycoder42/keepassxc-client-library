@@ -94,6 +94,8 @@ public Q_SLOTS:
 	void openDatabase();
 	void closeDatabase();
 
+	void generatePassword();
+
 	void setDatabaseRegistry(IKPXCDatabaseRegistry* databaseRegistry);
 	void setOptions(Options options);
 
@@ -103,6 +105,8 @@ Q_SIGNALS:
 
 	void databaseOpened(const QByteArray &dbHash, QPrivateSignal);
 	void databaseClosed(QPrivateSignal);
+
+	void passwordsGenerated(const QStringList &passwords, QPrivateSignal);
 
 	void databaseRegistryChanged(IKPXCDatabaseRegistry* databaseRegistry, QPrivateSignal);
 	void optionsChanged(Options options, QPrivateSignal);

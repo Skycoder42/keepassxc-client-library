@@ -32,9 +32,13 @@ int main(int argc, char *argv[])
 	});
 	QObject::connect(&client, &KPXCClient::databaseOpened, [&](QByteArray dbHash) {
 		qDebug() << "[[MAIN]]" << "Connected to database:" << dbHash.toHex();
+		client.generatePassword();
 //		QTimer::singleShot(5000, &client, [&](){
 //			client.closeDatabase();
 //		});
+	});
+	QObject::connect(&client, &KPXCClient::passwordsGenerated, [&](QStringList pwds) {
+		qDebug() << "[[MAIN]]" << "Passwords received:" << pwds;
 	});
 	QObject::connect(&client, &KPXCClient::databaseClosed, [&]() {
 		qDebug() << "[[MAIN]]" << "Database connection closed";
