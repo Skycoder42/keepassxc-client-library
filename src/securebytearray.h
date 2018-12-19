@@ -9,7 +9,7 @@
 #include "kpxcclient_global.h"
 
 class SecureByteArrayData;
-class SecureByteArray //TODO refactor name or use namespace
+class KPXCCLIENT_EXPORT SecureByteArray //TODO refactor name or use namespace
 {
 	Q_GADGET
 
@@ -23,7 +23,7 @@ public:
 	};
 	Q_ENUM(State)
 
-	class StateLocker {
+	class KPXCCLIENT_EXPORT StateLocker {
 		Q_DISABLE_COPY(StateLocker)
 	public:
 		StateLocker(SecureByteArray *data);
@@ -84,5 +84,7 @@ public:
 private:
 	QSharedDataPointer<SecureByteArrayData> d;
 };
+
+KPXCCLIENT_EXPORT uint qHash(const SecureByteArray &key, uint seed);
 
 #endif // SECUREBYTEARRAY_H

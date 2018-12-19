@@ -6,6 +6,7 @@
 #include <QtCore/QJsonObject>
 #include <QtCore/QTimer>
 #include <QtCore/QVersionNumber>
+#include <QtCore/QSet>
 
 #include "securebytearray.h"
 #include "kpxcclient.h"
@@ -56,7 +57,7 @@ private:
 	SodiumCryptor *_cryptor;
 	SecureByteArray _serverKey;
 	SecureByteArray _clientId;
-	SecureByteArray _nonce; //TODO remove or per action
+	QSet<SecureByteArray> _allowedNonces;
 
 	enum {
 		PhaseConnecting,

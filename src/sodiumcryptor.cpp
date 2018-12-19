@@ -44,7 +44,7 @@ SecureByteArray SodiumCryptor::publicKey() const
 
 QByteArray SodiumCryptor::encrypt(const QByteArray &plain, const SecureByteArray &publicKey, const SecureByteArray &nonce)
 {
-	QByteArray cipher{plain.size() + crypto_box_MACBYTES, Qt::Uninitialized};
+	QByteArray cipher{static_cast<int>(plain.size() + crypto_box_MACBYTES), Qt::Uninitialized};
 
 	SecureByteArray::StateLocker _{&_secretKey, SecureByteArray::State::Readonly};
 	const auto ok = crypto_box_easy(reinterpret_cast<quint8*>(cipher.data()),
@@ -59,10 +59,10 @@ QByteArray SodiumCryptor::encrypt(const QByteArray &plain, const SecureByteArray
 
 QByteArray SodiumCryptor::decrypt(const QByteArray &cipher, const SecureByteArray &publicKey, const SecureByteArray &nonce)
 {
-	if(cipher.size() < crypto_box_MACBYTES)
+	if(cipher.size() < static_cast<int>(crypto_box_MACBYTES))
 		return {};
 
-	QByteArray plain{cipher.size() - crypto_box_MACBYTES, Qt::Uninitialized};
+	QByteArray plain{static_cast<int>(cipher.size() - crypto_box_MACBYTES), Qt::Uninitialized};
 
 	SecureByteArray::StateLocker _{&_secretKey, SecureByteArray::State::Readonly};
 	const auto ok = crypto_box_open_easy(reinterpret_cast<quint8*>(plain.data()),

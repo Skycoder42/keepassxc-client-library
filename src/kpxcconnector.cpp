@@ -47,7 +47,6 @@ void KPXCConnector::connectToKeePass(const QString &target)
 	}
 	_serverKey.deallocate();
 	_clientId = _cryptor->generateRandomNonce(SecureByteArray::State::Readonly);
-	_nonce = _cryptor->generateRandomNonce(SecureByteArray::State::Readonly);
 
 	_process = new QProcess{this};
 	_process->setProgram(target);
@@ -103,31 +102,40 @@ void KPXCConnector::disconnectFromKeePass()
 
 void KPXCConnector::sendEncrypted(const QString &action, QJsonObject message, bool triggerUnlock)
 {
+	auto nonce = _cryptor->generateRandomNonce();
 	message[QStringLiteral("action")] = action;
 	auto encData = _cryptor->encrypt(QJsonDocument{message}.toJson(QJsonDocument::Compact),
 									 _serverKey,
-									 _nonce);
+									 nonce);
 
 	QJsonObject msgData;
 	msgData[QStringLiteral("action")] = action;
 	msgData[QStringLiteral("message")] = QString::fromUtf8(encData.toBase64());
-	msgData[QStringLiteral("nonce")] = _nonce.toBase64();
+	msgData[QStringLiteral("nonce")] = nonce.toBase64();
 	msgData[QStringLiteral("clientID")] = _clientId.toBase64();
 	msgData[QStringLiteral("triggerUnlock")] = QVariant{triggerUnlock}.toString();
 
-	_nonce.increment(true);
+	nonce.increment();
+	nonce.makeReadonly();
+	_allowedNonces.insert(nonce);
+
 	sendMessage(msgData);
 }
 
 void KPXCConnector::started()
 {
 	_connectPhase = PhaseConnected;
+	auto nonce = _cryptor->generateRandomNonce();
 	QJsonObject keysMessage;
 	keysMessage[QStringLiteral("action")] = QStringLiteral("change-public-keys");
 	keysMessage[QStringLiteral("publicKey")] = _cryptor->publicKey().toBase64();
-	keysMessage[QStringLiteral("nonce")] = _nonce.toBase64();
+	keysMessage[QStringLiteral("nonce")] = nonce.toBase64();
 	keysMessage[QStringLiteral("clientID")] = _clientId.toBase64();
-	_nonce.increment(true);
+
+	nonce.increment();
+	nonce.makeReadonly();
+	_allowedNonces.insert(nonce);
+
 	sendMessage(keysMessage);
 }
 
@@ -170,11 +178,10 @@ void KPXCConnector::stdOutReady()
 
 	//verify nonce
 	const auto kpNonce = SecureByteArray::fromBase64(encMessage[QStringLiteral("nonce")].toString(), SecureByteArray::State::Readonly);
-	//TODO handle better
-//	if(kpNonce != _nonce) {
-//		emit messageFailed(action, KPXCClient::Error::ClientReceivedNonceInvalid);
-//		return;
-//	}
+	if(!_allowedNonces.remove(kpNonce)) {
+		emit messageFailed(action, KPXCClient::Error::ClientReceivedNonceInvalid);
+		return;
+	}
 
 	// decrypt message
 	const auto plainData = _cryptor->decrypt(QByteArray::fromBase64(encMessage[QStringLiteral("message")].toString().toUtf8()),
@@ -217,7 +224,7 @@ void KPXCConnector::cleanup()
 	_cryptor->dropKeys();
 	_serverKey.deallocate();
 	_clientId.deallocate();
-	_nonce.deallocate();
+	_allowedNonces.clear();
 	_connectPhase = PhaseKill;
 }
 

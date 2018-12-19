@@ -278,3 +278,8 @@ bool SecureByteArrayData::setState(SecureByteArray::State newState)
 		state = newState;
 	return ok;
 }
+
+uint qHash(const SecureByteArray &key, uint seed)
+{
+	return qHash(key.asByteArray(), seed);
+}
