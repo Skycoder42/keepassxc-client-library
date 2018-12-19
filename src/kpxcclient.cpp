@@ -113,7 +113,7 @@ void KPXCClient::closeDatabase()
 {
 	if(state() != State::Unlocked)
 		return; //TODO error?
-	//TODO send lock message
+	d->connector->sendEncrypted(KPXCClientPrivate::ActionLockDatabase, {});
 }
 
 void KPXCClient::setDatabaseRegistry(IKPXCDatabaseRegistry *databaseRegistry)
@@ -165,6 +165,7 @@ void KPXCClient::dbError(KPXCClient::Error code, const QString &message)
 
 void KPXCClient::dbLocked()
 {
+	d->locked = true;
 	emit databaseClosed({});
 	if(d->options.testFlag(Option::DisconnectOnClose))
 		disconnectFromKeePass();
@@ -184,6 +185,8 @@ void KPXCClient::dbMsgRecv(const QString &action, const QJsonObject &message)
 		d->onAssoc(message);
 	else if(action == KPXCClientPrivate::ActionTestAssociate)
 		d->onTestAssoc(message);
+	else if(action == KPXCClientPrivate::ActionLockDatabase)
+		qDebug() << "Database locked successfully";
 	else
 		qDebug() << Q_FUNC_INFO << action << message;
 }
@@ -211,6 +214,7 @@ void KPXCClient::dbMsgFail(const QString &action, Error code, const QString &mes
 const QString KPXCClientPrivate::ActionGetDatabaseHash{QStringLiteral("get-databasehash")};
 const QString KPXCClientPrivate::ActionTestAssociate{QStringLiteral("test-associate")};
 const QString KPXCClientPrivate::ActionAssociate{QStringLiteral("associate")};
+const QString KPXCClientPrivate::ActionLockDatabase{QStringLiteral("lock-database")};
 
 bool KPXCClientPrivate::initialized = false;
 
@@ -332,6 +336,7 @@ void KPXCClientPrivate::onAssoc(const QJsonObject &message)
 	cId.key = std::move(_keyCache);
 	cId.key.makeReadonly();
 	dbReg->addClientId(currentDatabase, std::move(cId));
+	locked = false;
 	emit q->databaseOpened(currentDatabase, {});
 }
 
@@ -343,6 +348,7 @@ void KPXCClientPrivate::onTestAssoc(const QJsonObject &message)
 		q->disconnectFromKeePass();
 		return;
 	}
+	locked = false;
 	emit q->databaseOpened(currentDatabase, {});
 }
 

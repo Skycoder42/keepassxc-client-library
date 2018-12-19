@@ -10,6 +10,7 @@ public:
 	static const QString ActionGetDatabaseHash;
 	static const QString ActionTestAssociate;
 	static const QString ActionAssociate;
+	static const QString ActionLockDatabase;
 
 	static bool initialized;
 
