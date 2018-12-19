@@ -122,6 +122,31 @@ void KPXCClient::generatePassword()
 	d->connector->sendEncrypted(KPXCClientPrivate::ActionGeneratePassword);
 }
 
+void KPXCClient::getLogins(const QUrl &url, const QUrl &submitUrl, bool httpAuth, bool searchAllDatabases)
+{
+	QJsonObject message;
+	message[QStringLiteral("url")] = url.toString(QUrl::FullyEncoded);
+	if(!submitUrl.isEmpty())
+		message[QStringLiteral("submitUrl")] = submitUrl.toString(QUrl::FullyEncoded);
+	message[QStringLiteral("httpAuth")] = QVariant{httpAuth}.toString();
+
+	QList<IKPXCDatabaseRegistry::ClientId> clientIds;
+	if(searchAllDatabases)
+		clientIds = d->dbReg->getAllClientIds();
+	else
+		clientIds.append(d->dbReg->getClientId(d->currentDatabase));
+	QJsonArray keys;
+	for(const auto &cId : qAsConst(clientIds)) {
+		QJsonObject keyInfo;
+		keyInfo[QStringLiteral("id")] = cId.name;
+		keyInfo[QStringLiteral("key")] = cId.key.toBase64();
+		keys.append(keyInfo);
+	}
+	message[QStringLiteral("keys")] = keys;
+
+	d->connector->sendEncrypted(KPXCClientPrivate::ActionGetLogins, message);
+}
+
 void KPXCClient::setDatabaseRegistry(IKPXCDatabaseRegistry *databaseRegistry)
 {
 	if (d->dbReg == databaseRegistry)
@@ -193,6 +218,8 @@ void KPXCClient::dbMsgRecv(const QString &action, const QJsonObject &message)
 		d->onTestAssoc(message);
 	else if(action == KPXCClientPrivate::ActionGeneratePassword)
 		d->onGeneratePasswd(message);
+	else if(action == KPXCClientPrivate::ActionGetLogins)
+		d->onGetLogins(message);
 	else if(action == KPXCClientPrivate::ActionLockDatabase)
 		qDebug() << "Database locked successfully";
 	else
@@ -223,6 +250,7 @@ const QString KPXCClientPrivate::ActionGetDatabaseHash{QStringLiteral("get-datab
 const QString KPXCClientPrivate::ActionTestAssociate{QStringLiteral("test-associate")};
 const QString KPXCClientPrivate::ActionAssociate{QStringLiteral("associate")};
 const QString KPXCClientPrivate::ActionGeneratePassword{QStringLiteral("generate-password")};
+const QString KPXCClientPrivate::ActionGetLogins{QStringLiteral("get-logins")};
 const QString KPXCClientPrivate::ActionLockDatabase{QStringLiteral("lock-database")};
 
 bool KPXCClientPrivate::initialized = false;
@@ -365,9 +393,44 @@ void KPXCClientPrivate::onGeneratePasswd(const QJsonObject &message)
 {
 	const auto entries = message[QStringLiteral("entries")].toArray();
 	QStringList passwords;
-	for(const auto &entry : entries)
+	passwords.reserve(entries.size());
+	for(const auto entry : entries)
 		passwords.append(entry.toObject()[QStringLiteral("password")].toString());
 	emit q->passwordsGenerated(passwords, {});
+}
+
+void KPXCClientPrivate::onGetLogins(const QJsonObject &message)
+{
+	const auto jEntries = message[QStringLiteral("entries")].toArray();
+	QList<KPXCEntry> entries;
+	entries.reserve(jEntries.size());
+	for(const auto jEntryVal : jEntries) {
+		const auto jEntry = jEntryVal.toObject();
+		auto uuidStr = jEntry[QStringLiteral("uuid")].toString();
+		uuidStr = uuidStr.mid(0, 8) + QLatin1Char('-') +
+				  uuidStr.mid(8, 4) + QLatin1Char('-') +
+				  uuidStr.mid(12, 4) + QLatin1Char('-') +
+				  uuidStr.mid(16, 4) + QLatin1Char('-') +
+				  uuidStr.mid(20, 12);
+
+		KPXCEntry entry;
+		entry.setUuid(uuidStr);
+		entry.setTitle(jEntry[QStringLiteral("name")].toString());
+		entry.setUsername(jEntry[QStringLiteral("login")].toString());
+		entry.setPassword(jEntry[QStringLiteral("password")].toString());
+		entry.setTotp(jEntry[QStringLiteral("totp")].toString());
+
+		const auto stringFields = jEntry[QStringLiteral("stringFields")].toArray();
+		QMap<QString, QString> extraFields;
+		for(const auto jFieldVal : stringFields) {
+			const auto jField = jFieldVal.toObject();
+			for(auto it = jField.constBegin(); it != jField.constEnd(); ++it)
+				extraFields.insert(it.key(), it->toString());
+		}
+		entry.setExtraFields(std::move(extraFields));
+		entries.append(entry);
+	}
+	emit q->loginsReceived(entries, {});
 }
 
 void KPXCClientPrivate::sendTestAssoc()

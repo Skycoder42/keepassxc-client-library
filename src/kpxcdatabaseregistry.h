@@ -25,6 +25,7 @@ public:
 
 	virtual bool hasClientId(const QByteArray &databaseHash) = 0;
 	virtual ClientId getClientId(const QByteArray &databaseHash) = 0;
+	virtual QList<ClientId> getAllClientIds() = 0;
 
 	virtual void addClientId(const QByteArray &databaseHash, ClientId clientId) = 0;
 	virtual void removeClientId(const QByteArray &databaseHash) = 0;
@@ -52,6 +53,7 @@ public:
 	// IKPXCDatabaseRegistry interface
 	bool hasClientId(const QByteArray &databaseHash) override;
 	ClientId getClientId(const QByteArray &databaseHash) override;
+	QList<ClientId> getAllClientIds() override;
 	void addClientId(const QByteArray &databaseHash, ClientId clientId) override;
 	void removeClientId(const QByteArray &databaseHash) override;
 

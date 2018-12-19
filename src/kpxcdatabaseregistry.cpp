@@ -42,6 +42,16 @@ IKPXCDatabaseRegistry::ClientId KPXCDefaultDatabaseRegistry::getClientId(const Q
 	return clientId;
 }
 
+QList<IKPXCDatabaseRegistry::ClientId> KPXCDefaultDatabaseRegistry::getAllClientIds()
+{
+	QList<ClientId> idList;
+	for(auto it = d->clientIds.begin(); it != d->clientIds.end(); ++it) {
+		SecureByteArray::StateLocker _{&it->key, SecureByteArray::State::Readonly};
+		idList.append(*it);
+	}
+	return idList;
+}
+
 void KPXCDefaultDatabaseRegistry::addClientId(const QByteArray &databaseHash, ClientId clientId)
 {
 	auto it = d->clientIds.insert(databaseHash, clientId); //only shallow copy because of QSharedData

@@ -87,4 +87,7 @@ private:
 
 KPXCCLIENT_EXPORT uint qHash(const SecureByteArray &key, uint seed);
 
+Q_DECLARE_METATYPE(SecureByteArray)
+Q_DECLARE_TYPEINFO(SecureByteArray, Q_MOVABLE_TYPE);
+
 #endif // SECUREBYTEARRAY_H

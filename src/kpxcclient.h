@@ -4,9 +4,11 @@
 #include <QtCore/QScopedPointer>
 #include <QtCore/QObject>
 #include <QtCore/QJsonObject>
+#include <QtCore/QUrl>
 
 #include "kpxcclient_global.h"
 #include "kpxcdatabaseregistry.h"
+#include "kpxcentry.h"
 
 class KPXCClientPrivate;
 class KPXCCLIENT_EXPORT KPXCClient : public QObject
@@ -95,6 +97,10 @@ public Q_SLOTS:
 	void closeDatabase();
 
 	void generatePassword();
+	void getLogins(const QUrl &url,
+				   const QUrl &submitUrl = {},
+				   bool httpAuth = false,
+				   bool searchAllDatabases = false);
 
 	void setDatabaseRegistry(IKPXCDatabaseRegistry* databaseRegistry);
 	void setOptions(Options options);
@@ -107,6 +113,7 @@ Q_SIGNALS:
 	void databaseClosed(QPrivateSignal);
 
 	void passwordsGenerated(const QStringList &passwords, QPrivateSignal);
+	void loginsReceived(const QList<KPXCEntry> &entries, QPrivateSignal);
 
 	void databaseRegistryChanged(IKPXCDatabaseRegistry* databaseRegistry, QPrivateSignal);
 	void optionsChanged(Options options, QPrivateSignal);
