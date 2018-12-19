@@ -4,6 +4,7 @@ QT = core
 
 CONFIG += lib_bundle
 DEFINES += KPXCCLIENT_LIBRARY
+enable_msg_debug: DEFINES += KPXCCLIENT_MSG_DEBUG
 
 TARGET = $$qtLibraryTarget($$TARGET_BASE)
 QMAKE_TARGET_DESCRIPTION = "KeePassXC Client Library"

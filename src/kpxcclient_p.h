@@ -12,6 +12,7 @@ public:
 	static const QString ActionAssociate;
 	static const QString ActionGeneratePassword;
 	static const QString ActionGetLogins;
+	static const QString ActionSetLogin;
 	static const QString ActionLockDatabase;
 
 	static bool initialized;
@@ -24,8 +25,6 @@ public:
 
 	QByteArray currentDatabase;
 	bool locked = true;
-	KPXCClient::Error lastError = KPXCClient::Error::NoError;
-	QString lastErrorString;
 
 	SecureByteArray _keyCache;
 

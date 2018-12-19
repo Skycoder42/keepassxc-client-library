@@ -76,16 +76,6 @@ QByteArray KPXCClient::currentDatabase() const
 	return d->currentDatabase;
 }
 
-KPXCClient::Error KPXCClient::error() const
-{
-	return d->lastError;
-}
-
-QString KPXCClient::errorString() const
-{
-	return d->lastErrorString;
-}
-
 void KPXCClient::connectToKeePass(const QString &keePassPath)
 {
 	if(d->connector->isConnected()) {
@@ -125,9 +115,12 @@ void KPXCClient::generatePassword()
 void KPXCClient::getLogins(const QUrl &url, const QUrl &submitUrl, bool httpAuth, bool searchAllDatabases)
 {
 	QJsonObject message;
+	message[QStringLiteral("id")] = d->dbReg->getClientId(d->currentDatabase).name;
 	message[QStringLiteral("url")] = url.toString(QUrl::FullyEncoded);
 	if(!submitUrl.isEmpty())
 		message[QStringLiteral("submitUrl")] = submitUrl.toString(QUrl::FullyEncoded);
+	else
+		message[QStringLiteral("submitUrl")] = message[QStringLiteral("url")];
 	message[QStringLiteral("httpAuth")] = QVariant{httpAuth}.toString();
 
 	QList<IKPXCDatabaseRegistry::ClientId> clientIds;
@@ -145,6 +138,23 @@ void KPXCClient::getLogins(const QUrl &url, const QUrl &submitUrl, bool httpAuth
 	message[QStringLiteral("keys")] = keys;
 
 	d->connector->sendEncrypted(KPXCClientPrivate::ActionGetLogins, message);
+}
+
+void KPXCClient::addLogin(const QUrl &url, const KPXCEntry &entry, const QUrl &submitUrl)
+{
+	QJsonObject message;
+	message[QStringLiteral("id")] = d->dbReg->getClientId(d->currentDatabase).name;
+	message[QStringLiteral("url")] = url.toString(QUrl::FullyEncoded);
+	if(!submitUrl.isEmpty())
+		message[QStringLiteral("submitUrl")] = submitUrl.toString(QUrl::FullyEncoded);
+	else
+		message[QStringLiteral("submitUrl")] = message[QStringLiteral("url")];
+	if(entry.isStored())
+		message[QStringLiteral("uuid")] = entry.uuid().toString(QUuid::Id128);
+	message[QStringLiteral("login")] = entry.username();
+	message[QStringLiteral("password")] = entry.password();
+
+	d->connector->sendEncrypted(KPXCClientPrivate::ActionSetLogin, message);
 }
 
 void KPXCClient::setDatabaseRegistry(IKPXCDatabaseRegistry *databaseRegistry)
@@ -196,6 +206,9 @@ void KPXCClient::dbError(KPXCClient::Error code, const QString &message)
 
 void KPXCClient::dbLocked()
 {
+	if(d->locked)
+		return;
+
 	d->locked = true;
 	emit databaseClosed({});
 	if(d->options.testFlag(Option::DisconnectOnClose))
@@ -204,7 +217,9 @@ void KPXCClient::dbLocked()
 
 void KPXCClient::dbUnlocked()
 {
-	//TODO do nothing if already open?
+	if(!d->locked)
+		return;
+
 	openDatabase();
 }
 
@@ -220,10 +235,14 @@ void KPXCClient::dbMsgRecv(const QString &action, const QJsonObject &message)
 		d->onGeneratePasswd(message);
 	else if(action == KPXCClientPrivate::ActionGetLogins)
 		d->onGetLogins(message);
+	else if(action == KPXCClientPrivate::ActionSetLogin)
+		emit loginAdded({});
 	else if(action == KPXCClientPrivate::ActionLockDatabase)
-		qDebug() << "Database locked successfully";
-	else
-		qDebug() << Q_FUNC_INFO << action << message;
+		dbLocked();
+	else {
+		d->setError(Error::ClientUnsupportedAction, action);
+		disconnectFromKeePass();
+	}
 }
 
 void KPXCClient::dbMsgFail(const QString &action, Error code, const QString &message)
@@ -251,6 +270,7 @@ const QString KPXCClientPrivate::ActionTestAssociate{QStringLiteral("test-associ
 const QString KPXCClientPrivate::ActionAssociate{QStringLiteral("associate")};
 const QString KPXCClientPrivate::ActionGeneratePassword{QStringLiteral("generate-password")};
 const QString KPXCClientPrivate::ActionGetLogins{QStringLiteral("get-logins")};
+const QString KPXCClientPrivate::ActionSetLogin{QStringLiteral("set-login")};
 const QString KPXCClientPrivate::ActionLockDatabase{QStringLiteral("lock-database")};
 
 bool KPXCClientPrivate::initialized = false;
@@ -263,10 +283,7 @@ KPXCClientPrivate::KPXCClientPrivate(KPXCClient *q_ptr) :
 
 void KPXCClientPrivate::setError(KPXCClient::Error error, const QString &msg)
 {
-	if(error == lastError)
-		return;
-
-	lastError = error;
+	QString errorMessage;
 	switch(error) {
 	// KeePassXC errors -> only use msg description
 	case KPXCClient::Error::KeePassDatabaseNotOpen:
@@ -284,52 +301,52 @@ void KPXCClientPrivate::setError(KPXCClient::Error error, const QString &msg)
 	case KPXCClient::Error::KeePassEmptyMessageReceived:
 	case KPXCClient::Error::KeePassNoUrlProvided:
 	case KPXCClient::Error::KeePassNoLoginsFound:
-		lastErrorString = msg;
+		errorMessage = msg;
 		break;
 	// Client errors
 	case KPXCClient::Error::ClientAlreadyConnected:
-		lastErrorString = KPXCClient::tr("Already connected to a KeePassXC instance");
+		errorMessage = KPXCClient::tr("Already connected to a KeePassXC instance");
 		break;
 	case KPXCClient::Error::ClientKeyGenerationFailed:
-		lastErrorString = KPXCClient::tr("Failed to generate session keys");
+		errorMessage = KPXCClient::tr("Failed to generate session keys");
 		break;
 	case KPXCClient::Error::ClientReceivedNonceInvalid:
-		lastErrorString = KPXCClient::tr("Unexpected nonce received from KeePassXC");
+		errorMessage = KPXCClient::tr("Unexpected nonce received from KeePassXC");
 		break;
 	case KPXCClient::Error::ClientJsonParseError:
-		lastErrorString = KPXCClient::tr("Received JSON-data is invalid. JSON-Error: %1")
+		errorMessage = KPXCClient::tr("Received JSON-data is invalid. JSON-Error: %1")
 						  .arg(msg);
 		break;
 	case KPXCClient::Error::ClientActionsDontMatch:
-		lastErrorString = KPXCClient::tr("Data-Action field of encrypted and unencrypted message are not equal");
+		errorMessage = KPXCClient::tr("Data-Action field of encrypted and unencrypted message are not equal");
 		break;
 	case KPXCClient::Error::ClientUnsupportedVersion:
-		lastErrorString = KPXCClient::tr("Unsupported KeePassXC Version. Must be at least %1, but currently is %2")
+		errorMessage = KPXCClient::tr("Unsupported KeePassXC Version. Must be at least %1, but currently is %2")
 						  .arg(KPXCConnector::minimumKeePassXCVersion.toString(), msg);
 		break;
 	case KPXCClient::Error::ClientDatabaseChanged:
-		lastErrorString = KPXCClient::tr("The opened database in KeePassXC was changed");
+		errorMessage = KPXCClient::tr("The opened database in KeePassXC was changed");
 		break;
 	case KPXCClient::Error::ClientDatabaseRejected:
-		lastErrorString = KPXCClient::tr("The database hash was not known and thus rejected");
+		errorMessage = KPXCClient::tr("The database hash was not known and thus rejected");
+		break;
+	case KPXCClient::Error::ClientUnsupportedAction:
+		errorMessage = KPXCClient::tr("An unsupported action was received from KeePassXC: %1")
+						  .arg(msg);
 		break;
 	// General errors
-	case KPXCClient::Error::NoError:
-		lastErrorString = KPXCClient::tr("No Error");
-		break;
 	case KPXCClient::Error::UnknownError:
 	default:
-		lastErrorString = KPXCClient::tr("Unknown Error");
+		errorMessage = KPXCClient::tr("Unknown Error");
 		break;
 	}
-	emit q->errorChanged(lastError, {});
+	emit q->errorOccured(error, errorMessage, {});
 }
 
 void KPXCClientPrivate::clear()
 {
 	locked = true;
 	currentDatabase.clear();
-	setError(KPXCClient::Error::NoError);
 }
 
 void KPXCClientPrivate::onDbHash(const QJsonObject &message)

@@ -25,31 +25,40 @@ int main(int argc, char *argv[])
 					 &client, &KPXCClient::disconnectFromKeePass);
 #endif
 
-	QObject::connect(&client, &KPXCClient::errorChanged, [&](KPXCClient::Error error) {
-		if(error == KPXCClient::Error::NoError)
-			return;
-		qDebug() << error << client.errorString();
+	QObject::connect(&client, &KPXCClient::errorOccured, [&](KPXCClient::Error error, QString msg) {
+		qDebug() << error << msg;
 	});
 	QObject::connect(&client, &KPXCClient::databaseOpened, [&](QByteArray dbHash) {
 		qDebug() << "[[MAIN]]" << "Connected to database:" << dbHash.toHex();
-		client.getLogins(QStringLiteral("https://example.com/baum42"));
-//		client.generatePassword();
-//		QTimer::singleShot(5000, &client, [&](){
-//			client.closeDatabase();
-//		});
+		client.generatePassword();
 	});
 	QObject::connect(&client, &KPXCClient::passwordsGenerated, [&](QStringList pwds) {
 		qDebug() << "[[MAIN]]" << "Passwords received:" << pwds;
+		client.addLogin(QStringLiteral("https://example.com"), {"name", pwds.first()});
 	});
 	QObject::connect(&client, &KPXCClient::loginsReceived, [&](QList<KPXCEntry> entries) {
 		qDebug() << "[[MAIN]]" << "Entries received:" << entries.size();
-		for(auto entry : entries)
+		KPXCEntry changeEntry;
+		for(auto entry : entries) {
 			qDebug() << "  >>" << entry.uuid()
 					 << entry.title()
 					 << entry.username()
 					 << entry.password()
 					 << entry.totp()
 					 << entry.extraFields();
+			if(entry.username() == "name")
+				changeEntry = entry;
+		}
+		if(changeEntry.isStored()) {
+			changeEntry.setUsername("name2");
+			changeEntry.setPassword(changeEntry.password() + "*");
+			client.addLogin(QStringLiteral("https://example.com"), changeEntry);
+		} else
+			client.closeDatabase();
+	});
+	QObject::connect(&client, &KPXCClient::loginAdded, [&]() {
+		qDebug() << "[[MAIN]]" << "Login data was accepted by keepass";
+		client.getLogins(QStringLiteral("https://example.com/baum42"));
 	});
 	QObject::connect(&client, &KPXCClient::databaseClosed, [&]() {
 		qDebug() << "[[MAIN]]" << "Database connection closed";

@@ -5,6 +5,10 @@ KPXCEntry::KPXCEntry() :
 	d{new KPXCEntryData{}}
 {}
 
+KPXCEntry::KPXCEntry(QString username, QString password) :
+	d{new KPXCEntryData{std::move(username), std::move(password)}}
+{}
+
 KPXCEntry::KPXCEntry(const KPXCEntry &other) = default;
 
 KPXCEntry::KPXCEntry(KPXCEntry &&other) noexcept = default;
@@ -15,19 +19,9 @@ KPXCEntry &KPXCEntry::operator=(KPXCEntry &&other) noexcept = default;
 
 KPXCEntry::~KPXCEntry() = default;
 
-bool KPXCEntry::isValid() const
+bool KPXCEntry::isStored() const
 {
 	return !d->uuid.isNull();
-}
-
-KPXCEntry::operator bool() const
-{
-	return isValid();
-}
-
-bool KPXCEntry::operator!() const
-{
-	return !isValid();
 }
 
 QUuid KPXCEntry::uuid() const
@@ -65,16 +59,6 @@ QString KPXCEntry::extraField(const QString &name) const
 	return d->extraFields.value(name);
 }
 
-void KPXCEntry::setUuid(QUuid uuid)
-{
-	d->uuid = std::move(uuid);
-}
-
-void KPXCEntry::setTitle(QString title)
-{
-	d->title = std::move(title);
-}
-
 void KPXCEntry::setUsername(QString username)
 {
 	d->username = std::move(username);
@@ -85,6 +69,16 @@ void KPXCEntry::setPassword(QString password)
 	d->password = std::move(password);
 }
 
+void KPXCEntry::setUuid(QUuid uuid)
+{
+	d->uuid = std::move(uuid);
+}
+
+void KPXCEntry::setTitle(QString title)
+{
+	d->title = std::move(title);
+}
+
 void KPXCEntry::setTotp(QString totp)
 {
 	d->totp = std::move(totp);
@@ -93,16 +87,6 @@ void KPXCEntry::setTotp(QString totp)
 void KPXCEntry::setExtraFields(QMap<QString, QString> extraFields)
 {
 	d->extraFields = std::move(extraFields);
-}
-
-void KPXCEntry::setExtraField(const QString &name, const QString &value)
-{
-	d->extraFields.insert(name, value);
-}
-
-bool KPXCEntry::removeExtraField(const QString &name)
-{
-	return d->extraFields.remove(name) > 0;
 }
 
 bool KPXCEntry::operator==(const KPXCEntry &other) const
@@ -126,3 +110,8 @@ bool KPXCEntry::operator!=(const KPXCEntry &other) const
 		d->totp != other.d->totp ||
 		d->extraFields != other.d->extraFields);
 }
+
+KPXCEntryData::KPXCEntryData(QString &&username, QString &&password) :
+	username{std::move(username)},
+	password{std::move(password)}
+{}

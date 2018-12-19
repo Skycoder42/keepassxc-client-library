@@ -7,6 +7,7 @@ class KPXCEntryData : public QSharedData
 {
 public:
 	KPXCEntryData() = default;
+	KPXCEntryData(QString &&username, QString &&password);
 	KPXCEntryData(const KPXCEntryData &other) = default;
 
 	QUuid uuid;

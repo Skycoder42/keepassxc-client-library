@@ -44,7 +44,6 @@ public:
 	Q_ENUM(State)
 
 	enum class Error {
-		NoError = 0,
 		UnknownError = -1,
 
 		// KeePassXC internal errors
@@ -72,7 +71,8 @@ public:
 		ClientActionsDontMatch = 0x00050000,
 		ClientUnsupportedVersion = 0x00060000,
 		ClientDatabaseChanged = 0x00070000,
-		ClientDatabaseRejected = 0x00080000
+		ClientDatabaseRejected = 0x00080000,
+		ClientUnsupportedAction = 0x00090000
 	};
 	Q_ENUM(Error)
 
@@ -86,9 +86,6 @@ public:
 	State state() const;
 	QByteArray currentDatabase() const;
 
-	Error error() const;
-	QString errorString() const;
-
 public Q_SLOTS:
 	void connectToKeePass(const QString &keePassPath = QStringLiteral("keepassxc-proxy"));
 	void disconnectFromKeePass();
@@ -101,6 +98,9 @@ public Q_SLOTS:
 				   const QUrl &submitUrl = {},
 				   bool httpAuth = false,
 				   bool searchAllDatabases = false);
+	void addLogin(const QUrl &url,
+				  const KPXCEntry &entry,
+				  const QUrl &submitUrl = {});
 
 	void setDatabaseRegistry(IKPXCDatabaseRegistry* databaseRegistry);
 	void setOptions(Options options);
@@ -114,12 +114,13 @@ Q_SIGNALS:
 
 	void passwordsGenerated(const QStringList &passwords, QPrivateSignal);
 	void loginsReceived(const QList<KPXCEntry> &entries, QPrivateSignal);
+	void loginAdded(QPrivateSignal);
 
 	void databaseRegistryChanged(IKPXCDatabaseRegistry* databaseRegistry, QPrivateSignal);
 	void optionsChanged(Options options, QPrivateSignal);
 	void stateChanged(QPrivateSignal);
 	void currentDatabaseChanged(QByteArray currentDatabase, QPrivateSignal);
-	void errorChanged(Error error, QPrivateSignal);
+	void errorOccured(Error error, const QString &message, QPrivateSignal);
 
 protected:
 	virtual bool allowDatabase(const QByteArray &databaseHash) const;

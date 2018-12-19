@@ -104,6 +104,9 @@ void KPXCConnector::sendEncrypted(const QString &action, QJsonObject message, bo
 {
 	auto nonce = _cryptor->generateRandomNonce();
 	message[QStringLiteral("action")] = action;
+#ifdef KPXCCLIENT_MSG_DEBUG
+	qDebug() << "[[SEND PLAIN MESSAGE]]" << message;
+#endif
 	auto encData = _cryptor->encrypt(QJsonDocument{message}.toJson(QJsonDocument::Compact),
 									 _serverKey,
 									 nonce);
@@ -156,6 +159,9 @@ void KPXCConnector::stdOutReady()
 {
 	// read the message
 	const auto encMessage = readMessageData();
+#ifdef KPXCCLIENT_MSG_DEBUG
+	qDebug() << "[[RECEIVE RAW MESSAGE]]" << encMessage;
+#endif
 	if(encMessage.isEmpty())
 		return;
 
@@ -193,6 +199,9 @@ void KPXCConnector::stdOutReady()
 		emit messageFailed(action, KPXCClient::Error::ClientJsonParseError, error.errorString());
 		return;
 	}
+#ifdef KPXCCLIENT_MSG_DEBUG
+	qDebug() << "[[RECEIVE PLAIN MESSAGE]]" << message;
+#endif
 
 	// check for success
 	if(!performChecks(action, message))
@@ -207,6 +216,9 @@ void KPXCConnector::stdErrReady()
 
 void KPXCConnector::sendMessage(const QJsonObject &message)
 {
+#ifdef KPXCCLIENT_MSG_DEBUG
+	qDebug() << "[[SEND RAW MESSAGE]]" << message;
+#endif
 	const auto data = QJsonDocument{message}.toJson(QJsonDocument::Compact);
 	QByteArray length{sizeof(quint32), 0};
 	*reinterpret_cast<quint32*>(length.data()) = data.size();
