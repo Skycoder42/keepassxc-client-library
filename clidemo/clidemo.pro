@@ -23,5 +23,6 @@ INCLUDEPATH += $$PWD/../src
 DEPENDPATH += $$PWD/../src
 
 # Default rules for deployment.
+include(../install.pri)
 target.path = $$INSTALL_BINS
-install_cli: INSTALLS += target
+install_demo: INSTALLS += target

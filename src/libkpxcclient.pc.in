@@ -1,0 +1,7 @@
+
+Name: KPXCClient
+Description: A C++ library to access the browser-plugin-API of KeePassXC to retrieve of create entries.
+Version: 1.0.0
+Requires: Qt5Core libsodium
+Libs: -lkpxcclient
+Cflags: -I${includedir}
