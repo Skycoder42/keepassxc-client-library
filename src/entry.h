@@ -1,5 +1,5 @@
-#ifndef KPXCENTRY_H
-#define KPXCENTRY_H
+#ifndef KPXCCLIENT_ENTRY_H
+#define KPXCCLIENT_ENTRY_H
 
 #include <QtCore/QObject>
 #include <QtCore/QUuid>
@@ -9,8 +9,13 @@
 
 #include "kpxcclient_global.h"
 
-class KPXCEntryData;
-class KPXCCLIENT_EXPORT KPXCEntry
+namespace KPXCClient {
+
+class Client;
+class ClientPrivate;
+
+class EntryData;
+class KPXCCLIENT_EXPORT Entry
 {
 	Q_GADGET
 
@@ -22,13 +27,13 @@ class KPXCCLIENT_EXPORT KPXCEntry
 	Q_PROPERTY(QMap<QString, QString> extraFields READ extraFields CONSTANT)
 
 public:
-	KPXCEntry();
-	KPXCEntry(QString username, QString password);
-	KPXCEntry(const KPXCEntry &other);
-	KPXCEntry(KPXCEntry &&other) noexcept;
-	KPXCEntry &operator=(const KPXCEntry &other);
-	KPXCEntry &operator=(KPXCEntry &&other) noexcept;
-	~KPXCEntry();
+	Entry();
+	Entry(QString username, QString password);
+	Entry(const Entry &other);
+	Entry(Entry &&other) noexcept;
+	Entry &operator=(const Entry &other);
+	Entry &operator=(Entry &&other) noexcept;
+	~Entry();
 
 	bool isStored() const;
 
@@ -43,13 +48,13 @@ public:
 	void setUsername(QString username);
 	void setPassword(QString password);
 
-	bool operator==(const KPXCEntry &other) const;
-	bool operator!=(const KPXCEntry &other) const;
+	bool operator==(const Entry &other) const;
+	bool operator!=(const Entry &other) const;
 
 private:
-	friend class KPXCClient;
-	friend class KPXCClientPrivate;
-	QSharedDataPointer<KPXCEntryData> d;
+	friend class KPXCClient::Client;
+	friend class KPXCClient::ClientPrivate;
+	QSharedDataPointer<EntryData> d;
 
 	void setUuid(QUuid uuid);
 	void setTitle(QString title);
@@ -57,7 +62,9 @@ private:
 	void setExtraFields(QMap<QString, QString> extraFields);
 };
 
-Q_DECLARE_METATYPE(KPXCEntry)
-Q_DECLARE_TYPEINFO(KPXCEntry, Q_MOVABLE_TYPE);
+}
 
-#endif // KPXCENTRY_H
+Q_DECLARE_METATYPE(KPXCClient::Entry)
+Q_DECLARE_TYPEINFO(KPXCClient::Entry, Q_MOVABLE_TYPE);
+
+#endif // KPXCCLIENT_ENTRY_H

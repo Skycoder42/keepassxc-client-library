@@ -1,5 +1,5 @@
-#ifndef KEEPASSXCCLIENTLIBRARY_GLOBAL_H
-#define KEEPASSXCCLIENTLIBRARY_GLOBAL_H
+#ifndef KPXCCLIENT_GLOBAL_H
+#define KPXCCLIENT_GLOBAL_H
 
 #include <QtCore/qglobal.h>
 
@@ -9,4 +9,10 @@
 #  define KPXCCLIENT_EXPORT Q_DECL_IMPORT
 #endif
 
-#endif // KEEPASSXCCLIENTLIBRARY_GLOBAL_H
+namespace KPXCClient {
+
+KPXCCLIENT_EXPORT bool init();
+
+}
+
+#endif // KPXCCLIENT_GLOBAL_H

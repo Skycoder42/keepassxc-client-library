@@ -1,12 +1,13 @@
-#include "kpxcconnector_p.h"
+#include "connector_p.h"
 #include <QtCore/QDebug>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QStandardPaths>
 #include <chrono>
+using namespace KPXCClient;
 
-const QVersionNumber KPXCConnector::minimumKeePassXCVersion{2, 3, 0};
+const QVersionNumber Connector::minimumKeePassXCVersion{2, 3, 0};
 
-KPXCConnector::KPXCConnector(QObject *parent) :
+Connector::Connector(QObject *parent) :
 	QObject{parent},
 	_cryptor{new SodiumCryptor{this}},
 	_disconnectTimer{new QTimer{this}}
@@ -16,33 +17,33 @@ KPXCConnector::KPXCConnector(QObject *parent) :
 	_disconnectTimer->setSingleShot(true);
 	_disconnectTimer->setTimerType(Qt::CoarseTimer);
 	connect(_disconnectTimer, &QTimer::timeout,
-			this, &KPXCConnector::disconnectFromKeePass);
+			this, &Connector::disconnectFromKeePass);
 }
 
-bool KPXCConnector::isConnected() const
+bool Connector::isConnected() const
 {
 	return _connectPhase == PhaseConnected;
 }
 
-bool KPXCConnector::isConnecting() const
+bool Connector::isConnecting() const
 {
 	return _connectPhase == PhaseConnecting;
 }
 
-SodiumCryptor *KPXCConnector::cryptor() const
+SodiumCryptor *Connector::cryptor() const
 {
 	return _cryptor;
 }
 
-void KPXCConnector::connectToKeePass(const QString &target)
+void Connector::connectToKeePass(const QString &target)
 {
 	if(_process) {
-		emit error(KPXCClient::Error::ClientAlreadyConnected);
+		emit error(Client::Error::ClientAlreadyConnected);
 		return;
 	}
 
 	if(!_cryptor->createKeys()){
-		emit error(KPXCClient::Error::ClientKeyGenerationFailed);
+		emit error(Client::Error::ClientKeyGenerationFailed);
 		return;
 	}
 	_serverKey.deallocate();
@@ -51,21 +52,21 @@ void KPXCConnector::connectToKeePass(const QString &target)
 	_process = new QProcess{this};
 	_process->setProgram(target);
 	connect(_process, &QProcess::started,
-			this, &KPXCConnector::started);
+			this, &Connector::started);
 	connect(_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-			this, &KPXCConnector::finished);
+			this, &Connector::finished);
 	connect(_process, &QProcess::errorOccurred,
-			this, &KPXCConnector::procError);
+			this, &Connector::procError);
 	connect(_process, &QProcess::readyReadStandardOutput,
-			this, &KPXCConnector::stdOutReady);
+			this, &Connector::stdOutReady);
 	connect(_process, &QProcess::readyReadStandardError,
-			this, &KPXCConnector::stdErrReady);
+			this, &Connector::stdErrReady);
 
 	_connectPhase = PhaseConnecting;
 	_process->start();
 }
 
-void KPXCConnector::disconnectFromKeePass()
+void Connector::disconnectFromKeePass()
 {
 	if(!_process)
 		return;
@@ -100,7 +101,7 @@ void KPXCConnector::disconnectFromKeePass()
 	}
 }
 
-void KPXCConnector::sendEncrypted(const QString &action, QJsonObject message, bool triggerUnlock)
+void Connector::sendEncrypted(const QString &action, QJsonObject message, bool triggerUnlock)
 {
 	auto nonce = _cryptor->generateRandomNonce();
 	message[QStringLiteral("action")] = action;
@@ -125,7 +126,7 @@ void KPXCConnector::sendEncrypted(const QString &action, QJsonObject message, bo
 	sendMessage(msgData);
 }
 
-void KPXCConnector::started()
+void Connector::started()
 {
 	_connectPhase = PhaseConnected;
 	auto nonce = _cryptor->generateRandomNonce();
@@ -142,7 +143,7 @@ void KPXCConnector::started()
 	sendMessage(keysMessage);
 }
 
-void KPXCConnector::finished(int exitCode, QProcess::ExitStatus exitStatus)
+void Connector::finished(int exitCode, QProcess::ExitStatus exitStatus)
 {
 	qInfo() << "Connection closed with code:" << exitCode
 			<< "(Status:" << exitStatus << ")";
@@ -150,12 +151,12 @@ void KPXCConnector::finished(int exitCode, QProcess::ExitStatus exitStatus)
 	emit disconnected();
 }
 
-void KPXCConnector::procError(QProcess::ProcessError error)
+void Connector::procError(QProcess::ProcessError error)
 {
 	qCritical() << error << _process->errorString();
 }
 
-void KPXCConnector::stdOutReady()
+void Connector::stdOutReady()
 {
 	// read the message
 	const auto encMessage = readMessageData();
@@ -185,7 +186,7 @@ void KPXCConnector::stdOutReady()
 	//verify nonce
 	const auto kpNonce = SecureByteArray::fromBase64(encMessage[QStringLiteral("nonce")].toString(), SecureByteArray::State::Readonly);
 	if(!_allowedNonces.remove(kpNonce)) {
-		emit messageFailed(action, KPXCClient::Error::ClientReceivedNonceInvalid);
+		emit messageFailed(action, Client::Error::ClientReceivedNonceInvalid);
 		return;
 	}
 
@@ -196,7 +197,7 @@ void KPXCConnector::stdOutReady()
 	QJsonParseError error;
 	const auto message = QJsonDocument::fromJson(plainData, &error).object();
 	if(error.error != QJsonParseError::NoError){
-		emit messageFailed(action, KPXCClient::Error::ClientJsonParseError, error.errorString());
+		emit messageFailed(action, Client::Error::ClientJsonParseError, error.errorString());
 		return;
 	}
 #ifdef KPXCCLIENT_MSG_DEBUG
@@ -209,12 +210,12 @@ void KPXCConnector::stdOutReady()
 	emit messageReceived(action, message);
 }
 
-void KPXCConnector::stdErrReady()
+void Connector::stdErrReady()
 {
 	qWarning() << "stderr" << _process->readAllStandardError();
 }
 
-void KPXCConnector::sendMessage(const QJsonObject &message)
+void Connector::sendMessage(const QJsonObject &message)
 {
 #ifdef KPXCCLIENT_MSG_DEBUG
 	qDebug() << "[[SEND RAW MESSAGE]]" << message;
@@ -225,7 +226,7 @@ void KPXCConnector::sendMessage(const QJsonObject &message)
 	_process->write(length + data);
 }
 
-void KPXCConnector::cleanup()
+void Connector::cleanup()
 {
 	_disconnectTimer->stop();
 	if(_process) {
@@ -240,7 +241,7 @@ void KPXCConnector::cleanup()
 	_connectPhase = PhaseKill;
 }
 
-QJsonObject KPXCConnector::readMessageData()
+QJsonObject Connector::readMessageData()
 {
 	// read the data
 	const auto sizeData = _process->peek(sizeof(quint32));
@@ -259,26 +260,19 @@ QJsonObject KPXCConnector::readMessageData()
 	QJsonParseError error;
 	const auto message = QJsonDocument::fromJson(data, &error).object();
 	if(error.error != QJsonParseError::NoError) {
-		emit this->error(KPXCClient::Error::ClientJsonParseError, error.errorString());
+		emit this->error(Client::Error::ClientJsonParseError, error.errorString());
 		return {};
 	} else
 		return message;
 }
 
-bool KPXCConnector::performChecks(const QString &action, const QJsonObject &message)
+bool Connector::performChecks(const QString &action, const QJsonObject &message)
 {
-	// verify action
-	if(message.contains(QStringLiteral("action")) &&  //TODO remove if nowhere used...
-	   message[QStringLiteral("action")].toString() != action) {
-		emit messageFailed(action, KPXCClient::Error::ClientActionsDontMatch);
-		return false;
-	}
-
 	// verify version
 	if(message.contains(QStringLiteral("version"))) {
 		const auto kpVersion = QVersionNumber::fromString(message[QStringLiteral("version")].toString());
 		if(kpVersion < minimumKeePassXCVersion) {
-			messageFailed(action, KPXCClient::Error::ClientUnsupportedVersion, kpVersion.toString());
+			messageFailed(action, Client::Error::ClientUnsupportedVersion, kpVersion.toString());
 			return false;
 		}
 	}
@@ -293,7 +287,7 @@ bool KPXCConnector::performChecks(const QString &action, const QJsonObject &mess
 	}
 	if(!success) {
 		emit messageFailed(action,
-						   static_cast<KPXCClient::Error>(message[QStringLiteral("errorCode")].toVariant().toInt()),
+						   static_cast<Client::Error>(message[QStringLiteral("errorCode")].toVariant().toInt()),
 						   message[QStringLiteral("error")].toString());
 		return false;
 	}
@@ -301,7 +295,7 @@ bool KPXCConnector::performChecks(const QString &action, const QJsonObject &mess
 	return true;
 }
 
-void KPXCConnector::handleChangePublicKeys(const QString &publicKey)
+void Connector::handleChangePublicKeys(const QString &publicKey)
 {
 	_serverKey = SecureByteArray::fromBase64(publicKey, SecureByteArray::State::Readonly);
 	emit connected();

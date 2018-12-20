@@ -1,5 +1,6 @@
 #include <QCoreApplication>
-#include <kpxcclient.h>
+#include <client.h>
+#include <defaultdatabaseregistry.h>
 
 #include <QDebug>
 #include <QTimer>
@@ -8,6 +9,8 @@
 #include <QCtrlSignals>
 #endif
 
+using namespace KPXCClient;
+
 int main(int argc, char *argv[])
 {
 	QCoreApplication a(argc, argv);
@@ -15,30 +18,30 @@ int main(int argc, char *argv[])
 
 	KPXCClient::init();
 
-	KPXCClient client;
-	static_cast<KPXCDefaultDatabaseRegistry*>(client.databaseRegistry())->setPersistent(true);
+	Client client;
+	static_cast<DefaultDatabaseRegistry*>(client.databaseRegistry())->setPersistent(true);
 
 #ifdef USE_CTRL_SIGNALS
 	QCtrlSignalHandler::instance()->registerForSignal(QCtrlSignalHandler::SigInt);
 	QCtrlSignalHandler::instance()->registerForSignal(QCtrlSignalHandler::SigTerm);
 	QObject::connect(QCtrlSignalHandler::instance(), &QCtrlSignalHandler::ctrlSignal,
-					 &client, &KPXCClient::disconnectFromKeePass);
+					 &client, &Client::disconnectFromKeePass);
 #endif
 
-	QObject::connect(&client, &KPXCClient::errorOccured, [&](KPXCClient::Error error, QString msg) {
-		qDebug() << error << msg;
+	QObject::connect(&client, &Client::errorOccured, [&](Client::Error error, QString msg, QString action, bool unrecoverable) {
+		qDebug() << error << msg << action << unrecoverable;
 	});
-	QObject::connect(&client, &KPXCClient::databaseOpened, [&](QByteArray dbHash) {
+	QObject::connect(&client, &Client::databaseOpened, [&](QByteArray dbHash) {
 		qDebug() << "[[MAIN]]" << "Connected to database:" << dbHash.toHex();
 		client.generatePassword();
 	});
-	QObject::connect(&client, &KPXCClient::passwordsGenerated, [&](QStringList pwds) {
+	QObject::connect(&client, &Client::passwordsGenerated, [&](QStringList pwds) {
 		qDebug() << "[[MAIN]]" << "Passwords received:" << pwds;
 		client.addLogin(QStringLiteral("https://example.com"), {"name", pwds.first()});
 	});
-	QObject::connect(&client, &KPXCClient::loginsReceived, [&](QList<KPXCEntry> entries) {
+	QObject::connect(&client, &Client::loginsReceived, [&](QList<Entry> entries) {
 		qDebug() << "[[MAIN]]" << "Entries received:" << entries.size();
-		KPXCEntry changeEntry;
+		Entry changeEntry;
 		for(auto entry : entries) {
 			qDebug() << "  >>" << entry.uuid()
 					 << entry.title()
@@ -56,14 +59,14 @@ int main(int argc, char *argv[])
 		} else
 			client.closeDatabase();
 	});
-	QObject::connect(&client, &KPXCClient::loginAdded, [&]() {
+	QObject::connect(&client, &Client::loginAdded, [&]() {
 		qDebug() << "[[MAIN]]" << "Login data was accepted by keepass";
 		client.getLogins(QStringLiteral("https://example.com/baum42"));
 	});
-	QObject::connect(&client, &KPXCClient::databaseClosed, [&]() {
+	QObject::connect(&client, &Client::databaseClosed, [&]() {
 		qDebug() << "[[MAIN]]" << "Database connection closed";
 	});
-	QObject::connect(&client, &KPXCClient::disconnected,
+	QObject::connect(&client, &Client::disconnected,
 					 qApp, &QCoreApplication::quit,
 					 Qt::QueuedConnection);
 	client.connectToKeePass();

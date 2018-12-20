@@ -1,5 +1,5 @@
-#ifndef KPXCCONNECTOR_P_H
-#define KPXCCONNECTOR_P_H
+#ifndef KPXCCLIENT_CONNECTOR_P_H
+#define KPXCCLIENT_CONNECTOR_P_H
 
 #include <QtCore/QObject>
 #include <QtCore/QProcess>
@@ -9,17 +9,19 @@
 #include <QtCore/QSet>
 
 #include "securebytearray.h"
-#include "kpxcclient.h"
+#include "client.h"
 #include "sodiumcryptor_p.h"
 
-class KPXCConnector : public QObject
+namespace KPXCClient {
+
+class Connector : public QObject
 {
 	Q_OBJECT
 
 public:
 	static const QVersionNumber minimumKeePassXCVersion;
 
-	explicit KPXCConnector(QObject *parent = nullptr);
+	explicit Connector(QObject *parent = nullptr);
 
 	bool isConnected() const;
 	bool isConnecting() const;
@@ -37,12 +39,12 @@ public Q_SLOTS:
 Q_SIGNALS:
 	void connected();
 	void disconnected();
-	void error(KPXCClient::Error code, const QString &message = {});
+	void error(Client::Error code, const QString &message = {});
 
 	void locked();
 	void unlocked();
 	void messageReceived(const QString &action, const QJsonObject &message);
-	void messageFailed(const QString &action, KPXCClient::Error code, const QString &message ={});
+	void messageFailed(const QString &action, Client::Error code, const QString &message ={});
 
 private Q_SLOTS:
 	void started();
@@ -76,4 +78,6 @@ private:
 	void handleChangePublicKeys(const QString &publicKey);
 };
 
-#endif // KPXCCONNECTOR_P_H
+}
+
+#endif // KPXCCLIENT_CONNECTOR_P_H

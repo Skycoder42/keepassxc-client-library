@@ -1,6 +1,7 @@
 #include "securebytearray.h"
 #include "securebytearray_p.h"
 #include <sodium/utils.h>
+using namespace KPXCClient;
 
 #ifdef max
 #undef max
@@ -279,7 +280,7 @@ bool SecureByteArrayData::setState(SecureByteArray::State newState)
 	return ok;
 }
 
-uint qHash(const SecureByteArray &key, uint seed)
+uint KPXCClient::qHash(const SecureByteArray &key, uint seed)
 {
 	return qHash(key.asByteArray(), seed);
 }

@@ -1,5 +1,5 @@
-#ifndef KPXCCLIENT_H
-#define KPXCCLIENT_H
+#ifndef KPXCCLIENT_CLIENT_H
+#define KPXCCLIENT_CLIENT_H
 
 #include <QtCore/QScopedPointer>
 #include <QtCore/QObject>
@@ -7,15 +7,17 @@
 #include <QtCore/QUrl>
 
 #include "kpxcclient_global.h"
-#include "kpxcdatabaseregistry.h"
-#include "kpxcentry.h"
+#include "idatabaseregistry.h"
+#include "entry.h"
 
-class KPXCClientPrivate;
-class KPXCCLIENT_EXPORT KPXCClient : public QObject
+namespace KPXCClient {
+
+class ClientPrivate;
+class KPXCCLIENT_EXPORT Client : public QObject
 {
 	Q_OBJECT
 
-	Q_PROPERTY(IKPXCDatabaseRegistry* databaseRegistry READ databaseRegistry WRITE setDatabaseRegistry NOTIFY databaseRegistryChanged)
+	Q_PROPERTY(KPXCClient::IDatabaseRegistry* databaseRegistry READ databaseRegistry WRITE setDatabaseRegistry NOTIFY databaseRegistryChanged)
 	Q_PROPERTY(Options options READ options WRITE setOptions NOTIFY optionsChanged)
 
 	Q_PROPERTY(State state READ state NOTIFY stateChanged)
@@ -68,20 +70,17 @@ public:
 		ClientKeyGenerationFailed = 0x00020000,
 		ClientReceivedNonceInvalid = 0x00030000,
 		ClientJsonParseError = 0x00040000,
-		ClientActionsDontMatch = 0x00050000,
-		ClientUnsupportedVersion = 0x00060000,
-		ClientDatabaseChanged = 0x00070000,
-		ClientDatabaseRejected = 0x00080000,
-		ClientUnsupportedAction = 0x00090000
+		ClientUnsupportedVersion = 0x00050000,
+		ClientDatabaseChanged = 0x00060000,
+		ClientDatabaseRejected = 0x00070000,
+		ClientUnsupportedAction = 0x00080000
 	};
 	Q_ENUM(Error)
 
-	static bool init();
+	explicit Client(QObject *parent = nullptr);
+	~Client() override;
 
-	explicit KPXCClient(QObject *parent = nullptr);
-	~KPXCClient() override;
-
-	IKPXCDatabaseRegistry* databaseRegistry() const;
+	IDatabaseRegistry* databaseRegistry() const;
 	Options options() const;
 	State state() const;
 	QByteArray currentDatabase() const;
@@ -99,10 +98,10 @@ public Q_SLOTS:
 				   bool httpAuth = false,
 				   bool searchAllDatabases = false);
 	void addLogin(const QUrl &url,
-				  const KPXCEntry &entry,
+				  const Entry &entry,
 				  const QUrl &submitUrl = {});
 
-	void setDatabaseRegistry(IKPXCDatabaseRegistry* databaseRegistry);
+	void setDatabaseRegistry(IDatabaseRegistry* databaseRegistry);
 	void setOptions(Options options);
 
 Q_SIGNALS:
@@ -113,14 +112,14 @@ Q_SIGNALS:
 	void databaseClosed(QPrivateSignal);
 
 	void passwordsGenerated(const QStringList &passwords, QPrivateSignal);
-	void loginsReceived(const QList<KPXCEntry> &entries, QPrivateSignal);
+	void loginsReceived(const QList<Entry> &entries, QPrivateSignal);
 	void loginAdded(QPrivateSignal);
 
-	void databaseRegistryChanged(IKPXCDatabaseRegistry* databaseRegistry, QPrivateSignal);
+	void databaseRegistryChanged(IDatabaseRegistry* databaseRegistry, QPrivateSignal);
 	void optionsChanged(Options options, QPrivateSignal);
 	void stateChanged(QPrivateSignal);
 	void currentDatabaseChanged(QByteArray currentDatabase, QPrivateSignal);
-	void errorOccured(Error error, const QString &message, QPrivateSignal);
+	void errorOccured(Error error, const QString &message, const QString &action, bool unrecoverable, QPrivateSignal);
 
 protected:
 	virtual bool allowDatabase(const QByteArray &databaseHash) const;
@@ -135,10 +134,12 @@ private Q_SLOTS:
 	void dbMsgFail(const QString &action, Error code, const QString &message);
 
 private:
-	friend class KPXCClientPrivate;
-	QScopedPointer<KPXCClientPrivate> d;
+	friend class ClientPrivate;
+	QScopedPointer<ClientPrivate> d;
 };
 
-Q_DECLARE_OPERATORS_FOR_FLAGS(KPXCClient::Options)
+}
 
-#endif // KPXCCLIENT_H
+Q_DECLARE_OPERATORS_FOR_FLAGS(KPXCClient::Client::Options)
+
+#endif // KPXCCLIENT_CLIENT_H

@@ -2,6 +2,7 @@
 #include <sodium/crypto_box.h>
 #include <sodium/utils.h>
 #include <sodium/randombytes.h>
+using namespace KPXCClient;
 
 SodiumCryptor::SodiumCryptor(QObject *parent) :
 	QObject{parent}

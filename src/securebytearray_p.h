@@ -1,7 +1,9 @@
-#ifndef SECUREBYTEARRAY_P_H
-#define SECUREBYTEARRAY_P_H
+#ifndef KPXCCLIENT_SECUREBYTEARRAY_P_H
+#define KPXCCLIENT_SECUREBYTEARRAY_P_H
 
 #include "securebytearray.h"
+
+namespace KPXCClient {
 
 class SecureByteArrayData : public QSharedData
 {
@@ -19,4 +21,6 @@ public:
 	bool setState(SecureByteArray::State newState);
 };
 
-#endif // SECUREBYTEARRAY_P_H
+}
+
+#endif // KPXCCLIENT_SECUREBYTEARRAY_P_H

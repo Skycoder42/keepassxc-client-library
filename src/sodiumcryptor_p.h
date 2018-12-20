@@ -1,5 +1,5 @@
-#ifndef SODIUMCRYPTOR_P_H
-#define SODIUMCRYPTOR_P_H
+#ifndef KPXCCLIENT_SODIUMCRYPTOR_P_H
+#define KPXCCLIENT_SODIUMCRYPTOR_P_H
 
 #include <tuple>
 
@@ -7,6 +7,8 @@
 #include <QtCore/QByteArray>
 
 #include "securebytearray.h"
+
+namespace KPXCClient {
 
 class SodiumCryptor : public QObject
 {
@@ -34,4 +36,6 @@ private:
 	SecureByteArray _publicKey;
 };
 
-#endif // SODIUMCRYPTOR_P_H
+}
+
+#endif // KPXCCLIENT_SODIUMCRYPTOR_P_H

@@ -1,5 +1,5 @@
-#ifndef SECUREBYTEARRAY_H
-#define SECUREBYTEARRAY_H
+#ifndef KPXCCLIENT_SECUREBYTEARRAY_H
+#define KPXCCLIENT_SECUREBYTEARRAY_H
 
 #include <QtCore/QObject>
 #include <QtCore/QMetaObject>
@@ -7,6 +7,8 @@
 #include <QtCore/QSharedDataPointer>
 
 #include "kpxcclient_global.h"
+
+namespace KPXCClient {
 
 class SecureByteArrayData;
 class KPXCCLIENT_EXPORT SecureByteArray //TODO refactor name or use namespace
@@ -87,7 +89,9 @@ private:
 
 KPXCCLIENT_EXPORT uint qHash(const SecureByteArray &key, uint seed);
 
-Q_DECLARE_METATYPE(SecureByteArray)
-Q_DECLARE_TYPEINFO(SecureByteArray, Q_MOVABLE_TYPE);
+}
 
-#endif // SECUREBYTEARRAY_H
+Q_DECLARE_METATYPE(KPXCClient::SecureByteArray)
+Q_DECLARE_TYPEINFO(KPXCClient::SecureByteArray, Q_MOVABLE_TYPE);
+
+#endif // KPXCCLIENT_SECUREBYTEARRAY_H

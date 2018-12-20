@@ -1,10 +1,12 @@
-#ifndef KPXCCLIENT_P_H
-#define KPXCCLIENT_P_H
+#ifndef KPXCCLIENT_CLIENT_P_H
+#define KPXCCLIENT_CLIENT_P_H
 
-#include "kpxcclient.h"
-#include "kpxcconnector_p.h"
+#include "client.h"
+#include "connector_p.h"
 
-class KPXCClientPrivate
+namespace KPXCClient {
+
+class ClientPrivate
 {
 public:
 	static const QString ActionGetDatabaseHash;
@@ -17,20 +19,22 @@ public:
 
 	static bool initialized;
 
-	KPXCClient * const q;
-	KPXCConnector * const connector;
+	Client * const q;
+	Connector * const connector;
 
-	IKPXCDatabaseRegistry *dbReg;
-	KPXCClient::Options options = KPXCClient::Option::Default;
+	IDatabaseRegistry *dbReg;
+	Client::Options options = Client::Option::Default;
 
 	QByteArray currentDatabase;
 	bool locked = true;
 
 	SecureByteArray _keyCache;
 
-	KPXCClientPrivate(KPXCClient *q_ptr);
+	ClientPrivate(Client *q_ptr);
 
-	void setError(KPXCClient::Error error, const QString &msg = {});
+	void setError(const QString &action,
+				  Client::Error error,
+				  const QString &msg = {});
 	void clear();
 
 	void onDbHash(const QJsonObject &message);
@@ -43,4 +47,6 @@ public:
 	void sendAssoc();
 };
 
-#endif // KPXCCLIENT_P_H
+}
+
+#endif // KPXCCLIENT_CLIENT_P_H
