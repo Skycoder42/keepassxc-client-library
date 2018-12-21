@@ -46,7 +46,7 @@ After that, you can use the client itself to connect to a database:
 
 ```.cpp
 KPXCClient::Client client;
-QObject::connect(&client, &Client::databaseOpened, [&](QByteArray dbHash) {
+QObject::connect(&client, &KPXCClient::Client::databaseOpened, [&](QByteArray dbHash) {
 	qDebug() << "Connected to database:" << dbHash.toHex();
 	// perform whatever operations you need to perform
 });
