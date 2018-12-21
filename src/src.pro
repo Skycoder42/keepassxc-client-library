@@ -77,7 +77,7 @@ unix {
 	PRE_TARGETDEPS += libkpxcclient.pc
 	pc_install.files = $$OUT_PWD/libkpxcclient.pc
 	pc_install.CONFIG += no_check_exist
-	pc_install.path += $$INSTALL_LIBS/pkgconfig/
+	pc_install.path += $$INSTALL_PKGCONFIG
 	INSTALLS += pc_install
 }
 
